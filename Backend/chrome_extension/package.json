@@ -1,0 +1,22 @@
+{
+  "name": "superior-reading-backend",
+  "version": "1.0.0",
+  "description": "Backend server for Superior Reading Chrome extension",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "fs-extra": "^11.1.1",
+    "moment": "^2.29.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["chrome-extension", "web-scraping", "content-extraction"],
+  "author": "Superior Reading",
+  "license": "MIT"
+}
