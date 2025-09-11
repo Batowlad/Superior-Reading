@@ -1,0 +1,4 @@
+#ignore Auto-generated folders and files like: node_modules, scraped_data, and package-lock.json
+scraped_data/
+node_modules/
+package-lock.json
