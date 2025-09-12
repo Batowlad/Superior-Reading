@@ -7,12 +7,7 @@
     "activeTab",
     "storage",
     "scripting",
-    "tabs",
-    "webRequest",
-    "webRequestBlocking",
-    "http://localhost/*",
-    "https://*/*",
-    "http://*/*"
+    "tabs"
   ],
   "host_permissions": [
     "http://localhost/*",
