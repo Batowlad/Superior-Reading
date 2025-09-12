@@ -16,6 +16,72 @@ app.use(express.urlencoded({ extended: true }));
 const dataDir = path.join(__dirname, 'scraped_data');
 fs.ensureDirSync(dataDir);
 
+// Configuration for automatic cleanup
+const CLEANUP_CONFIG = {
+    enabled: true,
+    deleteAfterMinutes: 1, // Delete all files after 1 minute
+    cleanupIntervalMinutes: 1 // Run cleanup every 1 minute
+};
+
+// Automatic cleanup function - deletes all files after 1 minute
+async function cleanupOldFiles() {
+    if (!CLEANUP_CONFIG.enabled) return;
+    
+    try {
+        console.log('🧹 Starting automatic cleanup...');
+        
+        const files = await fs.readdir(dataDir);
+        const jsonFiles = files.filter(file => 
+            file.endsWith('.json') && 
+            file !== 'scraping_summary.json'
+        );
+        
+        if (jsonFiles.length === 0) {
+            console.log('📁 No files to clean up');
+            return;
+        }
+        
+        // Get file stats and check age
+        const fileStats = await Promise.all(
+            jsonFiles.map(async (file) => {
+                const filePath = path.join(dataDir, file);
+                const stats = await fs.stat(filePath);
+                return {
+                    filename: file,
+                    filePath: filePath,
+                    created: stats.birthtime,
+                    size: stats.size
+                };
+            })
+        );
+        
+        const now = new Date();
+        const maxAge = CLEANUP_CONFIG.deleteAfterMinutes * 60 * 1000; // Convert to milliseconds
+        let deletedCount = 0;
+        let deletedSize = 0;
+        
+        // Delete all files older than 1 minute
+        for (const file of fileStats) {
+            const age = now - file.created;
+            if (age > maxAge) {
+                await fs.remove(file.filePath);
+                deletedCount++;
+                deletedSize += file.size;
+                console.log(`🗑️ Deleted file: ${file.filename} (${Math.round(age / 1000)}s old)`);
+            }
+        }
+        
+        if (deletedCount > 0) {
+            console.log(`✅ Cleanup completed: Deleted ${deletedCount} files (${Math.round(deletedSize / 1024)}KB freed)`);
+        } else {
+            console.log('✅ Cleanup completed: No files needed deletion');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error during cleanup:', error);
+    }
+}
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ 
@@ -215,6 +281,23 @@ app.delete('/api/content/:filename', async (req, res) => {
     }
 });
 
+// Manual cleanup endpoint
+app.post('/api/cleanup', async (req, res) => {
+    try {
+        await cleanupOldFiles();
+        res.json({ 
+            success: true, 
+            message: 'Cleanup completed successfully' 
+        });
+    } catch (error) {
+        console.error('Error during manual cleanup:', error);
+        res.status(500).json({ 
+            error: 'Cleanup failed',
+            message: error.message 
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log('🚀 Superior Reading Backend Server started');
@@ -227,9 +310,25 @@ app.listen(PORT, () => {
     console.log('   GET  /api/files - List all scraped files');
     console.log('   GET  /api/content/:filename - Get specific content');
     console.log('   DELETE /api/content/:filename - Delete specific file');
+    console.log('   POST /api/cleanup - Manual cleanup trigger');
+    console.log('');
+    console.log('🧹 Automatic cleanup:');
+    console.log(`   - Enabled: ${CLEANUP_CONFIG.enabled}`);
+    console.log(`   - Delete after: ${CLEANUP_CONFIG.deleteAfterMinutes} minute(s)`);
+    console.log(`   - Check interval: ${CLEANUP_CONFIG.cleanupIntervalMinutes} minute(s)`);
     console.log('');
     console.log('💡 Make sure to install dependencies: npm install');
     console.log('💡 Start the server: npm start');
+    
+    // Start automatic cleanup timer
+    if (CLEANUP_CONFIG.enabled) {
+        // Run cleanup immediately on startup
+        setTimeout(cleanupOldFiles, 10000); // Wait 10 seconds after startup
+        
+        // Set up recurring cleanup every minute
+        setInterval(cleanupOldFiles, CLEANUP_CONFIG.cleanupIntervalMinutes * 60 * 1000);
+        console.log('⏰ Automatic cleanup timer started - files will be deleted after 1 minute');
+    }
 });
 
 // Graceful shutdown
