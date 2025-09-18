@@ -86,6 +86,14 @@
     // Send data to backend server
     async function sendToServer(data) {
         try {
+            console.log('🔄 Attempting to send data to server:', CONFIG.serverUrl);
+            console.log('📊 Data being sent:', {
+                url: data.url,
+                title: data.title,
+                wordCount: data.wordCount,
+                domain: data.domain
+            });
+            
             const response = await fetch(CONFIG.serverUrl, {
                 method: 'POST',
                 headers: {
@@ -94,37 +102,57 @@
                 body: JSON.stringify(data)
             });
 
+            console.log('📡 Server response status:', response.status);
+            console.log('📡 Server response headers:', response.headers);
+
             if (response.ok) {
-                console.log('Content successfully sent to server');
+                const responseData = await response.json();
+                console.log('✅ Content successfully sent to server:', responseData);
                 return true;
             } else {
-                console.error('Failed to send content to server:', response.status);
+                const errorText = await response.text();
+                console.error('❌ Failed to send content to server:', response.status, errorText);
                 return false;
             }
         } catch (error) {
-            console.error('Error sending data to server:', error);
+            console.error('❌ Error sending data to server:', error);
+            console.error('❌ Error details:', {
+                message: error.message,
+                name: error.name,
+                stack: error.stack
+            });
             return false;
         }
     }
 
     // Main scraping function
     async function scrapeAndSend() {
-        console.log('Starting content scraping...');
+        console.log('🚀 Starting content scraping...');
+        console.log('📍 Current URL:', window.location.href);
+        console.log('📍 Current title:', document.title);
         
         const contentData = extractMainContent();
         if (!contentData || !contentData.content) {
-            console.log('No meaningful content found to scrape');
+            console.log('❌ No meaningful content found to scrape');
+            console.log('🔍 Page content length:', document.body.textContent.length);
+            console.log('🔍 Available selectors:', {
+                main: document.querySelector('main'),
+                article: document.querySelector('article'),
+                content: document.querySelector('.content'),
+                body: document.body
+            });
             return;
         }
 
-        console.log(`Scraped content: ${contentData.wordCount} words from ${contentData.url}`);
+        console.log(`✅ Scraped content: ${contentData.wordCount} words from ${contentData.url}`);
+        console.log(`📄 Content preview: ${contentData.content.substring(0, 200)}...`);
         
         // Send to server
         const success = await sendToServer(contentData);
         if (success) {
-            console.log('Content successfully sent to backend server');
+            console.log('🎉 Content successfully sent to backend server');
         } else {
-            console.error('Failed to send content to backend server');
+            console.error('💥 Failed to send content to backend server');
         }
     }
 

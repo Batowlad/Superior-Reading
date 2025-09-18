@@ -1,0 +1,2 @@
+from langchain_openai import ChatOpenAI
+llm = ChatOpenAI(model="gpt-4o-mini", api_key="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")
