@@ -151,6 +151,22 @@ All scraped content is stored locally in JSON format with the following structur
   "fileSize": 50000
 }
 ```
+### Using the AI Agent to read the latest scraped content
+
+The Python module at `Backend/AI Agent/ai_agent.py` exposes a variable `text` that automatically loads the `content` from the most recently modified scraped JSON file in `Backend/chrome_extension/scraped_data/` whose filename matches `_YYYY-MM-DD_HH-MM-SS.json` (optionally prefixed with `@`).
+
+Usage example:
+
+```python
+from pathlib import Path
+from Backend.AI Agent.ai_agent import text
+
+print(text)  # Prints the latest scraped page content or an empty string if none
+```
+
+Notes:
+- The agent only reads local files and does not modify them.
+- If the directory does not exist or no matching files are found, `text` will be an empty string.
 
 ## Security Notes
 
