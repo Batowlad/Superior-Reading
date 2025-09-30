@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import re
-from typing import Optional
+from typing import Optional, TypedDict, List
 
 
 # Directory containing scraped JSON files, resolved relative to this file
@@ -52,7 +52,11 @@ page_content: str = _read_content_from_json(_latest_file) if _latest_file else "
 from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key="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")
 
-
+class AgentState(TypedDict):
+    analysis_result: AnalysisResult
+    tags: TaggedResult
+    revision_number: int
+    max_revisions: int
 
 CONTENT_ANALYZER_PROMPT = """You are an AI assistant that analyzes written text and extracts its thematic and emotional characteristics for music matching.
 
@@ -97,6 +101,12 @@ Now analyze the following input:
 
 """
 
+class AnalysisResult(TypedDict):
+    theme: str
+    mood: List[str]
+
+
+
 EMBEDDING/TAGGING_PROMPT = """You are an AI assistant that converts thematic and emotional descriptors into compact tags and structured embeddings for music matching.
 
 Input JSON:
@@ -132,3 +142,10 @@ Output:
   "embedding_description": "Epic and dramatic fantasy adventure with intense atmosphere."
 }
 """
+
+class TaggedResult(TypedDict):
+    tags: List[str]
+    embedding_description: str
+
+
+
