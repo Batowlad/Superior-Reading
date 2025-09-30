@@ -97,3 +97,38 @@ Now analyze the following input:
 
 """
 
+EMBEDDING/TAGGING_PROMPT = """You are an AI assistant that converts thematic and emotional descriptors into compact tags and structured embeddings for music matching.
+
+Input JSON:
+{analysis_result}
+
+Task:
+1. Extract the "theme" and "mood" fields.
+2. Generate a short list of 3 to 6 descriptive tags that capture both theme and mood.
+   - Tags should be lowercase, single or two-word labels (e.g., "dark fantasy", "romantic", "epic", "calm").
+   - Tags must avoid redundancy.
+3. Provide an "embedding_description" that is a short natural language sentence summarizing the theme and mood in a way that can be converted into a vector.
+   - Example: "Epic and dramatic fantasy adventure with intense atmosphere."
+
+Output strictly in JSON format:
+{
+  "tags": ["tag1", "tag2", "tag3", ...],
+  "embedding_description": "short sentence for embedding"
+}
+
+---
+
+### Example
+
+Input JSON:
+{
+  "theme": "fantasy adventure",
+  "mood": ["epic", "intense", "dramatic"]
+}
+
+Output:
+{
+  "tags": ["fantasy adventure", "epic", "intense", "dramatic"],
+  "embedding_description": "Epic and dramatic fantasy adventure with intense atmosphere."
+}
+"""
