@@ -56,17 +56,44 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key="sk-proj-PizLTaV8
 
 CONTENT_ANALYZER_PROMPT = """You are an AI assistant that analyzes written text and extracts its thematic and emotional characteristics for music matching.
 
+Follow these rules:
+- Always summarize the main theme in 2 to 5 words.
+- Always list moods as an array of 1 to 4 words.
+- Always return output strictly in JSON format with keys: "theme" and "mood".
+
+---
+
+### Examples
+
 Input:
-{page_content}
+"A spaceship crew lands on a distant planet filled with hostile alien life. The air is toxic, and the crew must struggle to survive."
+Output:
+{
+  "theme": "sci-fi survival",
+  "mood": ["tense", "mysterious", "dark"]
+}
 
-Task:
-1. Summarize the main theme of the text in a few words (e.g., "sci-fi exploration", "romantic drama", "dark fantasy").
-2. Identify the mood(s) conveyed by the text (e.g., "tense", "calm", "mysterious", "epic", "joyful").
-3. Output the result strictly in JSON format with the keys "theme" and "mood".
+Input:
+"A young couple walks hand in hand through the park, laughing as cherry blossoms fall around them."
+Output:
+{
+  "theme": "romantic slice of life",
+  "mood": ["joyful", "peaceful"]
+}
 
-Output format example:
+Input:
+"A knight faces a dragon guarding an ancient treasure deep within a cave. The clash is fierce, and the stakes are life or death."
+Output:
 {
   "theme": "fantasy adventure",
-  "mood": ["mysterious", "tense"]
+  "mood": ["epic", "intense", "dramatic"]
 }
+
+---
+
+Now analyze the following input:
+
+{page_content}
+
 """
+
