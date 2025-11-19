@@ -35,6 +35,52 @@ Superior Reading/
 
 ## Setup Instructions
 
+### Prerequisites: Python Virtual Environment (for AI Agent)
+
+If you plan to use the AI Agent component, it's recommended to use a Python virtual environment to manage dependencies.
+
+#### Creating a Virtual Environment
+
+**On macOS/Linux:**
+```bash
+cd "Backend/AI Agent"
+python3 -m venv venv
+```
+
+**On Windows:**
+```bash
+cd "Backend\AI Agent"
+python -m venv venv
+```
+
+#### Activating a Virtual Environment
+
+**On macOS/Linux:**
+```bash
+source venv/bin/activate
+```
+
+**On Windows:**
+```bash
+venv\Scripts\activate
+```
+
+After activation, you'll see `(venv)` at the beginning of your command prompt.
+
+#### Installing Dependencies
+
+Once the virtual environment is activated:
+```bash
+pip install -r requirements.txt
+```
+
+#### Deactivating a Virtual Environment
+
+To exit the virtual environment when you're done:
+```bash
+deactivate
+```
+
 ### 1. Backend Server Setup
 
 1. **Navigate to the backend directory:**
