@@ -3,3 +3,5 @@ scraped_data/
 node_modules/
 package-lock.json
 .venv/
+.DS_Store
+Frontend/.DS_Store
