@@ -107,14 +107,17 @@
     // Main content extraction function
     function extractMainContent() {
         try {
-            // Remove script and style elements
-            const scripts = document.querySelectorAll('script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar');
+            // Create a clone of the document to work with, so we don't modify the original page
+            const clonedBody = document.body.cloneNode(true);
+            
+            // Remove script and style elements from the CLONE only
+            const scripts = clonedBody.querySelectorAll('script, style, nav, header, footer, aside, .advertisement, .ads, .sidebar');
             scripts.forEach(el => el.remove());
 
             // Try multiple strategies to find main content
             let content = '';
             
-            // Strategy 1: Look for common main content selectors
+            // Strategy 1: Look for common main content selectors in the CLONE
             const mainSelectors = [
                 'main',
                 'article',
@@ -130,18 +133,16 @@
             ];
 
             for (const selector of mainSelectors) {
-                const element = document.querySelector(selector);
+                const element = clonedBody.querySelector(selector);
                 if (element && element.textContent.trim().length > 100) {
                     content = element.textContent.trim();
                     break;
                 }
             }
 
-            // Strategy 2: If no main content found, use body but filter out navigation
+            // Strategy 2: If no main content found, use cloned body but filter out navigation
             if (!content) {
-                const body = document.body.cloneNode(true);
-                
-                // Remove common non-content elements
+                // Remove common non-content elements from the CLONE
                 const elementsToRemove = [
                     'nav', 'header', 'footer', 'aside', 'script', 'style',
                     '.navigation', '.nav', '.menu', '.sidebar', '.advertisement',
@@ -149,11 +150,11 @@
                 ];
                 
                 elementsToRemove.forEach(selector => {
-                    const elements = body.querySelectorAll(selector);
+                    const elements = clonedBody.querySelectorAll(selector);
                     elements.forEach(el => el.remove());
                 });
 
-                content = body.textContent.trim();
+                content = clonedBody.textContent.trim();
             }
 
             // Clean up the content
