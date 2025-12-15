@@ -6,48 +6,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const status = document.getElementById('status');
     const serverStatus = document.getElementById('serverStatus');
 
-    // Simple status update
+    // Neo-brutalist status update
     function updateStatus(message, type = 'info') {
         status.textContent = message;
         
-        // Color coding based on type
+        // Bold color coding for neo-brutalist style
         if (type === 'success') {
-            status.style.background = '#e8f5e9';
-            status.style.borderLeftColor = '#2e7d32';
-            status.style.color = '#1b5e20';
+            status.style.background = '#7bf1a8';
+            status.style.color = '#000000';
         } else if (type === 'error') {
-            status.style.background = '#ffebee';
-            status.style.borderLeftColor = '#c62828';
-            status.style.color = '#b71c1c';
+            status.style.background = '#ff006e';
+            status.style.color = '#ffffff';
         } else if (type === 'processing') {
-            status.style.background = '#e3f2fd';
-            status.style.borderLeftColor = '#1976d2';
-            status.style.color = '#0d47a1';
+            status.style.background = '#00f0ff';
+            status.style.color = '#000000';
         } else {
-            status.style.background = '#f5f5f5';
-            status.style.borderLeftColor = '#666';
-            status.style.color = '#444';
+            status.style.background = '#ffd60a';
+            status.style.color = '#000000';
         }
     }
 
     // Test server connection
     async function testConnection() {
         testBtn.disabled = true;
-        updateStatus('Testing connection...', 'processing');
+        updateStatus('TESTING CONNECTION...', 'processing');
         
         try {
             const response = await fetch('http://localhost:3000/api/health');
             if (response.ok) {
                 serverStatus.textContent = 'Online';
                 serverStatus.className = 'status-indicator connected';
-                updateStatus('Server connection successful', 'success');
+                updateStatus('SERVER ONLINE!', 'success');
             } else {
                 throw new Error('Server not responding');
             }
         } catch (error) {
             serverStatus.textContent = 'Offline';
             serverStatus.className = 'status-indicator disconnected';
-            updateStatus('Server connection failed. Make sure backend is running.', 'error');
+            updateStatus('SERVER OFFLINE', 'error');
         } finally {
             testBtn.disabled = false;
         }
@@ -55,9 +51,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Manual scrape function
     function manualScrape() {
-        updateStatus('Scraping current page...', 'processing');
+        updateStatus('SCRAPING PAGE...', 'processing');
         scrapeBtn.disabled = true;
-        scrapeBtn.textContent = 'Processing...';
+        scrapeBtn.textContent = 'PROCESSING...';
         
         chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
             if (tabs[0]) {
@@ -71,12 +67,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 setTimeout(() => {
-                    updateStatus('Scraping completed', 'success');
+                    updateStatus('SCRAPING COMPLETE!', 'success');
                     scrapeBtn.disabled = false;
                     scrapeBtn.textContent = 'Scrape Current Page';
                 }, 2000);
             } else {
-                updateStatus('No active tab found', 'error');
+                updateStatus('NO ACTIVE TAB', 'error');
                 scrapeBtn.disabled = false;
                 scrapeBtn.textContent = 'Scrape Current Page';
             }
@@ -91,9 +87,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Store preference
         chrome.storage.sync.set({autoScrape: isActive}, () => {
             if (isActive) {
-                updateStatus('Auto-scrape enabled', 'success');
+                updateStatus('AUTO-SCRAPE ON', 'success');
             } else {
-                updateStatus('Auto-scrape disabled', 'info');
+                updateStatus('AUTO-SCRAPE OFF', 'info');
             }
         });
     }
@@ -115,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
     autoToggle.addEventListener('click', toggleAutoScrape);
 
     // Initial status
-    updateStatus('Ready to scrape content', 'info');
+    updateStatus('READY TO SCRAPE', 'info');
 
     // Test connection on popup open
     testConnection();
