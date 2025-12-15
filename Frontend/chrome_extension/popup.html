@@ -3,6 +3,8 @@
 <head>
     <meta charset="utf-8">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Space+Mono:wght@400;700&display=swap');
+        
         * {
             margin: 0;
             padding: 0;
@@ -11,77 +13,106 @@
         
         body {
             width: 350px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Space Mono', monospace;
             background: #ffffff;
-            color: #1a1a1a;
+            color: #000000;
             margin: 0;
         }
         
         .container {
-            padding: 24px;
+            padding: 0;
+            background: #ffffff;
         }
         
         .header {
-            margin-bottom: 24px;
-            border-bottom: 1px solid #e5e5e5;
-            padding-bottom: 16px;
+            margin-bottom: 0;
+            padding: 20px;
+            background: #000000;
+            color: #ffffff;
+            border: 4px solid #000000;
+            box-shadow: 8px 8px 0 0 #ff006e;
         }
         
         h1 {
-            font-size: 20px;
-            margin: 0 0 4px 0;
-            font-weight: 600;
-            color: #1a1a1a;
-            letter-spacing: -0.5px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 24px;
+            margin: 0 0 8px 0;
+            font-weight: 700;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
         
         .subtitle {
-            font-size: 12px;
-            color: #666;
-            font-weight: 400;
+            font-size: 11px;
+            color: #00f0ff;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .status {
-            background: #f5f5f5;
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin: 16px 0;
+            background: #ffd60a;
+            padding: 16px;
+            margin: 0;
             font-size: 13px;
-            color: #444;
-            border-left: 3px solid #666;
+            font-weight: 700;
+            color: #000000;
+            border: 4px solid #000000;
+            border-top: none;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .button {
-            background: #1a1a1a;
-            border: none;
-            color: #ffffff;
-            padding: 10px 16px;
-            border-radius: 6px;
+            background: #00f0ff;
+            border: 4px solid #000000;
+            color: #000000;
+            padding: 14px 20px;
             cursor: pointer;
+            font-family: 'Space Mono', monospace;
             font-size: 13px;
-            font-weight: 500;
-            width: 100%;
-            margin: 8px 0;
-            transition: background 0.2s ease;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            width: calc(100% - 40px);
+            margin: 20px 20px 0 20px;
+            transition: all 0.1s ease;
+            box-shadow: 6px 6px 0 0 #000000;
+            position: relative;
         }
         
         .button:hover {
-            background: #333;
+            background: #ff006e;
+            color: #ffffff;
+            transform: translate(2px, 2px);
+            box-shadow: 4px 4px 0 0 #000000;
         }
         
         .button:active {
-            background: #000;
+            transform: translate(6px, 6px);
+            box-shadow: 0px 0px 0 0 #000000;
         }
         
         .button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: 6px 6px 0 0 #000000;
+        }
+        
+        .button:disabled:hover {
+            background: #00f0ff;
+            color: #000000;
+            transform: none;
         }
         
         .settings {
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid #e5e5e5;
+            margin: 20px;
+            padding: 16px;
+            border: 4px solid #000000;
+            background: #ffffff;
+            box-shadow: 6px 6px 0 0 #000000;
         }
         
         .setting-item {
@@ -89,66 +120,68 @@
             justify-content: space-between;
             align-items: center;
             margin: 12px 0;
-            font-size: 13px;
-            color: #444;
+            font-size: 12px;
+            font-weight: 700;
+            color: #000000;
+            text-transform: uppercase;
         }
         
         .toggle {
             position: relative;
-            width: 44px;
-            height: 24px;
-            background: #ccc;
-            border-radius: 12px;
+            width: 50px;
+            height: 28px;
+            background: #e0e0e0;
+            border: 3px solid #000000;
             cursor: pointer;
-            transition: background 0.2s ease;
+            transition: all 0.1s ease;
         }
         
         .toggle.active {
-            background: #1a1a1a;
+            background: #7bf1a8;
         }
         
         .toggle::after {
             content: '';
             position: absolute;
-            width: 20px;
-            height: 20px;
-            background: #fff;
-            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            background: #000000;
             top: 2px;
             left: 2px;
-            transition: transform 0.2s ease;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s ease;
         }
         
         .toggle.active::after {
-            transform: translateX(20px);
+            transform: translateX(22px);
         }
         
         .status-indicator {
             font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-weight: 500;
+            padding: 6px 12px;
+            font-weight: 700;
+            border: 3px solid #000000;
+            text-transform: uppercase;
         }
         
         .status-indicator.connected {
-            background: #e8f5e9;
-            color: #2e7d32;
+            background: #7bf1a8;
+            color: #000000;
         }
         
         .status-indicator.disconnected {
-            background: #ffebee;
-            color: #c62828;
+            background: #ff006e;
+            color: #ffffff;
         }
         
         .info {
-            font-size: 12px;
-            color: #666;
-            margin-top: 16px;
-            line-height: 1.5;
-            padding: 12px;
-            background: #f9f9f9;
-            border-radius: 6px;
+            font-size: 11px;
+            color: #000000;
+            margin: 20px;
+            line-height: 1.6;
+            padding: 16px;
+            background: #f8f8f8;
+            border: 4px solid #000000;
+            box-shadow: 6px 6px 0 0 #ffd60a;
         }
     </style>
 </head>
@@ -160,7 +193,7 @@
         </div>
         
         <div class="status" id="status">
-            Ready to scrape content
+            READY TO SCRAPE
         </div>
         
         <button class="button" id="scrapeBtn">Scrape Current Page</button>
@@ -178,7 +211,7 @@
         </div>
         
         <div class="info">
-            This extension automatically scrapes the main content from web pages and sends it to your local server.
+            Automatically scrapes main content from web pages and sends it to your local server for processing.
         </div>
     </div>
     
