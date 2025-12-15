@@ -57,38 +57,38 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-            if (tabs[0]) {
-                // Send message to content script and wait for actual completion
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'scrape'}, (response) => {
-                    // Handle response from content script
-                    if (chrome.runtime.lastError) {
-                        // Content script might not be loaded or error occurred
-                        console.error('Error communicating with content script:', chrome.runtime.lastError);
-                        updateStatus('SCRAPING FAILED', 'error');
-                        scrapeBtn.disabled = false;
-                        scrapeBtn.textContent = 'Scrape Current Page';
-                        return;
-                    }
-                    
-                    if (response && response.success) {
-                        updateStatus('SCRAPING COMPLETE!', 'success');
-                    } else {
-                        const errorMsg = response?.error || 'Unknown error';
-                        console.error('Scraping failed:', errorMsg);
-                        updateStatus('SCRAPING FAILED', 'error');
-                    }
-                    
-                    scrapeBtn.disabled = false;
-                    scrapeBtn.textContent = 'Scrape Current Page';
-                });
-            } else {
+            if (!tabs[0]) {
                 updateStatus('NO ACTIVE TAB', 'error');
                 scrapeBtn.disabled = false;
                 scrapeBtn.textContent = 'Scrape Current Page';
+                return;
+            }
+
+            // Wrap chrome.tabs.sendMessage in a Promise to properly await it
+            const response = await new Promise((resolve, reject) => {
+                chrome.tabs.sendMessage(tabs[0].id, {action: 'scrape'}, (response) => {
+                    // Check for Chrome runtime errors
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
+                    }
+                    resolve(response);
+                });
+            });
+
+            // Handle response from content script
+            if (response && response.success) {
+                updateStatus('SCRAPING COMPLETE!', 'success');
+            } else {
+                const errorMsg = response?.error || 'Unknown error';
+                console.error('Scraping failed:', errorMsg);
+                updateStatus('SCRAPING FAILED', 'error');
             }
         } catch (error) {
             console.error('Error during scraping:', error);
             updateStatus('SCRAPING FAILED', 'error');
+        } finally {
+            // Always reset button state, regardless of success or failure
             scrapeBtn.disabled = false;
             scrapeBtn.textContent = 'Scrape Current Page';
         }
