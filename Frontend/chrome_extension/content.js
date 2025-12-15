@@ -240,7 +240,7 @@
                 body: document.body
             });
             createY2KNotification('❌ No Content Found', 'error', 3000);
-            return;
+            return false;
         }
 
         console.log(`✅ Scraped content: ${contentData.wordCount} words from ${contentData.url}`);
@@ -251,9 +251,11 @@
         if (success) {
             console.log('🎉 Content successfully sent to backend server');
             createY2KNotification(`✨ Scraped ${contentData.wordCount} Words! 🎉`, 'success', 4000);
+            return true;
         } else {
             console.error('💥 Failed to send content to backend server');
             createY2KNotification('❌ Failed to Send', 'error', 3000);
+            return false;
         }
     }
 
@@ -272,8 +274,8 @@
     // Listen for messages from popup or background script
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'scrape') {
-            scrapeAndSend().then(() => {
-                sendResponse({success: true});
+            scrapeAndSend().then((success) => {
+                sendResponse({success: success});
             }).catch(error => {
                 console.error('Scraping error:', error);
                 sendResponse({success: false, error: error.message});

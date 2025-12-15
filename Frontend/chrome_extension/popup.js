@@ -50,33 +50,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Manual scrape function
-    function manualScrape() {
+    async function manualScrape() {
         updateStatus('SCRAPING PAGE...', 'processing');
         scrapeBtn.disabled = true;
         scrapeBtn.textContent = 'PROCESSING...';
         
-        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        try {
+            const tabs = await chrome.tabs.query({active: true, currentWindow: true});
             if (tabs[0]) {
-                chrome.scripting.executeScript({
-                    target: { tabId: tabs[0].id },
-                    function: () => {
-                        if (window.superiorReadingScrape) {
-                            window.superiorReadingScrape();
-                        }
+                // Send message to content script and wait for actual completion
+                chrome.tabs.sendMessage(tabs[0].id, {action: 'scrape'}, (response) => {
+                    // Handle response from content script
+                    if (chrome.runtime.lastError) {
+                        // Content script might not be loaded or error occurred
+                        console.error('Error communicating with content script:', chrome.runtime.lastError);
+                        updateStatus('SCRAPING FAILED', 'error');
+                        scrapeBtn.disabled = false;
+                        scrapeBtn.textContent = 'Scrape Current Page';
+                        return;
                     }
-                });
-                
-                setTimeout(() => {
-                    updateStatus('SCRAPING COMPLETE!', 'success');
+                    
+                    if (response && response.success) {
+                        updateStatus('SCRAPING COMPLETE!', 'success');
+                    } else {
+                        const errorMsg = response?.error || 'Unknown error';
+                        console.error('Scraping failed:', errorMsg);
+                        updateStatus('SCRAPING FAILED', 'error');
+                    }
+                    
                     scrapeBtn.disabled = false;
                     scrapeBtn.textContent = 'Scrape Current Page';
-                }, 2000);
+                });
             } else {
                 updateStatus('NO ACTIVE TAB', 'error');
                 scrapeBtn.disabled = false;
                 scrapeBtn.textContent = 'Scrape Current Page';
             }
-        });
+        } catch (error) {
+            console.error('Error during scraping:', error);
+            updateStatus('SCRAPING FAILED', 'error');
+            scrapeBtn.disabled = false;
+            scrapeBtn.textContent = 'Scrape Current Page';
+        }
     }
 
     // Toggle auto-scrape
