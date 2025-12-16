@@ -63,7 +63,7 @@ from langgraph.graph import StateGraph, END
 llm = ChatOpenAI(
     model="gpt-4o-mini", 
     temperature=0.3, 
-    api_key=os.getenv("OPENAI_API_KEY", "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")
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 # Pydantic models for structured output
