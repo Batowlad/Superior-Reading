@@ -45,6 +45,6 @@
     "pages": ["spotify_sandbox.html"]
   },
   "content_security_policy": {
-    "sandbox": "sandbox allow-scripts; script-src 'self' https://sdk.scdn.co; connect-src https://*.spotify.com https://*.scdn.co https://accounts.spotify.com"
+    "sandbox": "sandbox allow-scripts; script-src 'self' https://sdk.scdn.co; connect-src https://*.spotify.com https://*.scdn.co"
   }
 }
