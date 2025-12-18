@@ -7,7 +7,8 @@
     "activeTab",
     "storage",
     "scripting",
-    "tabs"
+    "tabs",
+    "identity"
   ],
   "host_permissions": [
     "http://localhost/*",
@@ -39,5 +40,11 @@
     "32": "icons/book_icon.png",
     "48": "icons/book_icon.png",
     "128": "icons/book_icon.png"
+  },
+  "sandbox": {
+    "pages": ["spotify_sandbox.html"]
+  },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts; script-src 'self' https://sdk.scdn.co; connect-src https://*.spotify.com https://*.scdn.co https://accounts.spotify.com"
   }
 }
