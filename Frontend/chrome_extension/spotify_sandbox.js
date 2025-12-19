@@ -5,6 +5,7 @@
 let spotifyPlayer = null;
 let deviceId = null;
 let accessToken = null;
+let errorSent = false; // Track if we've already sent an error to avoid duplicates
 
 // Message types for communication with parent
 const MESSAGE_TYPES = {
@@ -101,20 +102,36 @@ async function initializePlayer(token) {
             volume: 0.5
         });
 
-        // Set up event handlers
+        // Set up event handlers BEFORE connecting
         setupPlayerHandlers();
 
-        // Connect to Spotify
+        // Reset error flag for new connection attempt
+        errorSent = false;
+        
+        // Connect to Spotify and wait for ready event or error
         const connected = await spotifyPlayer.connect();
         
         if (!connected) {
-            sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
-                error: 'Failed to connect to Spotify'
-            });
+            // Connection failed immediately - this usually means:
+            // 1. Invalid token
+            // 2. Missing Premium subscription
+            // 3. Network issue
+            // We'll wait a bit for error events to fire, then send generic error if none received
+            setTimeout(() => {
+                // If no error event was received, send generic error
+                if (!errorSent) {
+                    errorSent = true;
+                    sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
+                        error: 'Failed to connect to Spotify. Please check:\n1. Your Spotify Premium subscription\n2. Your internet connection\n3. Try re-authenticating'
+                    });
+                }
+            }, 2000);
             return;
         }
 
-        console.log('[Sandbox] Spotify Player connected');
+        // Connection initiated successfully - wait for ready event
+        // The ready event will be handled by setupPlayerHandlers()
+        console.log('[Sandbox] Spotify Player connection initiated, waiting for ready event...');
     } catch (error) {
         console.error('[Sandbox] Error initializing player:', error);
         sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
@@ -152,17 +169,23 @@ function setupPlayerHandlers() {
     // Authentication error
     spotifyPlayer.addListener('authentication_error', ({ message }) => {
         console.error('[Sandbox] Authentication error:', message);
-        sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
-            error: 'Authentication error: ' + message
-        });
+        if (!errorSent) {
+            errorSent = true;
+            sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
+                error: 'Authentication failed. Please try re-authenticating. Error: ' + message
+            });
+        }
     });
 
     // Account error (e.g., Premium required)
     spotifyPlayer.addListener('account_error', ({ message }) => {
         console.error('[Sandbox] Account error:', message);
-        sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
-            error: 'Account error: ' + message
-        });
+        if (!errorSent) {
+            errorSent = true;
+            sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
+                error: 'Spotify Premium required. The Web Playback SDK requires a Premium subscription. Error: ' + message
+            });
+        }
     });
 
     // Playback state updates
@@ -188,14 +211,18 @@ function setupPlayerHandlers() {
     // Initialization error
     spotifyPlayer.addListener('initialization_error', ({ message }) => {
         console.error('[Sandbox] Initialization error:', message);
-        sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
-            error: 'Initialization error: ' + message
-        });
+        if (!errorSent) {
+            errorSent = true;
+            sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
+                error: 'Failed to initialize Spotify player. Please try refreshing. Error: ' + message
+            });
+        }
     });
 
     // Playback error
     spotifyPlayer.addListener('playback_error', ({ message }) => {
         console.error('[Sandbox] Playback error:', message);
+        // Playback errors can happen after connection, so we don't check errorSent here
         sendToParent(MESSAGE_TYPES.PLAYER_ERROR, {
             error: 'Playback error: ' + message
         });
