@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superior Reading - Spotify Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.authenticating {
+            background: rgba(255, 193, 7, 0.2);
+        }
+
+        .status.ready {
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        .status.error {
+            background: rgba(244, 67, 54, 0.2);
+        }
+
+        .status.loading {
+            background: rgba(33, 150, 243, 0.2);
+        }
+
+        .player-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .track-info {
+            margin-top: 15px;
+        }
+
+        .track-info h3 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .track-info p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .auth-button {
+            background: #1db954;
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+        }
+
+        .auth-button:hover:not(:disabled) {
+            background: #1ed760;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #sandboxFrame {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Superior Reading Player</h1>
+        
+        <div id="status" class="status loading">Initializing...</div>
+        
+        <div id="authSection" class="hidden">
+            <button id="authButton" class="auth-button">Connect to Spotify</button>
+        </div>
+
+        <div id="playerSection" class="hidden">
+            <div class="player-info">
+                <div id="deviceInfo">Device: Not ready</div>
+                <div class="track-info" id="trackInfo"></div>
+            </div>
+            
+            <div class="controls">
+                <button id="playPauseBtn" disabled>Play</button>
+                <button id="nextBtn" disabled>Next</button>
+                <button id="prevBtn" disabled>Previous</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sandbox iframe for Spotify SDK -->
+    <iframe id="sandboxFrame" src="spotify_sandbox.html"></iframe>
+
+    <!-- Scripts -->
+    <script src="spotify_auth.js"></script>
+    <script src="player.js"></script>
+</body>
+</html>
