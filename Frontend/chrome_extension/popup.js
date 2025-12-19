@@ -5,6 +5,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const autoToggle = document.getElementById('autoToggle');
     const status = document.getElementById('status');
     const serverStatus = document.getElementById('serverStatus');
+    
+    // Player elements
+    const playerSection = document.getElementById('playerSection');
+    const playerStatus = document.getElementById('playerStatus');
+    const playerContent = document.getElementById('playerContent');
+    const playerControls = document.getElementById('playerControls');
+    const authButton = document.getElementById('authButton');
+    const trackName = document.getElementById('trackName');
+    const trackArtist = document.getElementById('trackArtist');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const sandboxFrame = document.getElementById('sandboxFrame');
+    
+    // Player state
+    let accessToken = null;
+    let deviceId = null;
+    let isAuthenticated = false;
+    let isPlayerReady = false;
+    let currentTrack = null;
+    let isPlaying = false;
+    let pendingRecommendations = null;
+    
+    // Message types from sandbox
+    const SANDBOX_MESSAGE_TYPES = {
+        DEVICE_ID: 'device_id',
+        PLAYER_READY: 'player_ready',
+        PLAYER_ERROR: 'player_error',
+        PLAYER_STATE: 'player_state',
+        NOT_AUTHENTICATED: 'not_authenticated'
+    };
 
     // Neo-brutalist status update
     function updateStatus(message, type = 'info') {
@@ -130,4 +161,317 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Test connection on popup open
     testConnection();
+    
+    // ========== SPOTIFY PLAYER FUNCTIONALITY ==========
+    
+    /**
+     * Update player status
+     */
+    function updatePlayerStatus(message, type = 'default') {
+        playerStatus.textContent = message;
+        playerStatus.className = `player-status ${type}`;
+    }
+    
+    /**
+     * Show authentication UI
+     */
+    function showAuthUI() {
+        playerContent.classList.remove('hidden');
+        playerControls.classList.add('hidden');
+    }
+    
+    /**
+     * Show player controls
+     */
+    function showPlayerControls() {
+        playerContent.classList.add('hidden');
+        playerControls.classList.remove('hidden');
+    }
+    
+    /**
+     * Initialize authentication check
+     */
+    async function initializePlayerAuth() {
+        try {
+            const authenticated = await window.SpotifyAuth.isAuthenticated();
+            
+            if (authenticated) {
+                await loadPlayerAccessToken();
+                await initializePlayer();
+            } else {
+                updatePlayerStatus('Not Connected', 'error');
+                showAuthUI();
+            }
+        } catch (error) {
+            console.error('Error checking authentication:', error);
+            updatePlayerStatus('Error', 'error');
+            showAuthUI();
+        }
+    }
+    
+    /**
+     * Load access token from storage
+     */
+    async function loadPlayerAccessToken() {
+        try {
+            accessToken = await window.SpotifyAuth.getAccessToken();
+            isAuthenticated = true;
+            return accessToken;
+        } catch (error) {
+            console.error('Error loading access token:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Handle authentication button click
+     */
+    authButton.addEventListener('click', async () => {
+        authButton.disabled = true;
+        updatePlayerStatus('Connecting...', 'default');
+        
+        try {
+            await window.SpotifyAuth.authenticate();
+            await loadPlayerAccessToken();
+            await initializePlayer();
+            updatePlayerStatus('Connected', 'ready');
+        } catch (error) {
+            console.error('Authentication error:', error);
+            updatePlayerStatus('Failed', 'error');
+            authButton.disabled = false;
+        }
+    });
+    
+    /**
+     * Initialize Spotify player via sandbox
+     */
+    async function initializePlayer() {
+        if (!accessToken) {
+            throw new Error('No access token available');
+        }
+
+        updatePlayerStatus('Initializing...', 'default');
+        
+        // Send access token to sandbox to initialize player
+        if (sandboxFrame.contentWindow) {
+            sandboxFrame.contentWindow.postMessage({
+                type: 'init_player',
+                access_token: accessToken
+            }, '*');
+        } else {
+            // Wait for iframe to load
+            sandboxFrame.onload = () => {
+                sandboxFrame.contentWindow.postMessage({
+                    type: 'init_player',
+                    access_token: accessToken
+                }, '*');
+            };
+        }
+    }
+    
+    /**
+     * Handle messages from sandbox iframe
+     */
+    window.addEventListener('message', (event) => {
+        const message = event.data;
+        
+        if (!message || !message.type) {
+            return;
+        }
+
+        switch (message.type) {
+            case SANDBOX_MESSAGE_TYPES.DEVICE_ID:
+            case SANDBOX_MESSAGE_TYPES.PLAYER_READY:
+                deviceId = message.device_id;
+                isPlayerReady = true;
+                updatePlayerStatus('Ready', 'ready');
+                showPlayerControls();
+                
+                // Enable controls
+                playPauseBtn.disabled = false;
+                nextBtn.disabled = false;
+                prevBtn.disabled = false;
+                
+                // If we have pending recommendations, play them
+                if (pendingRecommendations) {
+                    playRecommendations(pendingRecommendations);
+                    pendingRecommendations = null;
+                }
+                break;
+
+            case SANDBOX_MESSAGE_TYPES.PLAYER_ERROR:
+                console.error('Player error:', message.error);
+                updatePlayerStatus('Error', 'error');
+                break;
+
+            case SANDBOX_MESSAGE_TYPES.PLAYER_STATE:
+                if (message.state) {
+                    isPlaying = !message.state.paused;
+                    currentTrack = message.state.track;
+                    
+                    // Update UI
+                    playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+                    
+                    if (currentTrack) {
+                        trackName.textContent = currentTrack.name || 'Unknown Track';
+                        trackArtist.textContent = currentTrack.artist || '';
+                    } else {
+                        trackName.textContent = 'No track playing';
+                        trackArtist.textContent = '';
+                    }
+                }
+                break;
+
+            case SANDBOX_MESSAGE_TYPES.NOT_AUTHENTICATED:
+                updatePlayerStatus('Not Connected', 'error');
+                showAuthUI();
+                isAuthenticated = false;
+                break;
+
+            default:
+                console.log('Unknown message from sandbox:', message.type);
+        }
+    });
+    
+    /**
+     * Play recommendations using Spotify Web API
+     */
+    async function playRecommendations(recommendations) {
+        if (!isPlayerReady || !deviceId || !accessToken) {
+            console.log('Player not ready, storing recommendations for later');
+            pendingRecommendations = recommendations;
+            return;
+        }
+
+        // Extract Spotify track IDs from recommendations
+        const trackUris = recommendations
+            .filter(rec => rec.spotify_id)
+            .map(rec => `spotify:track:${rec.spotify_id}`);
+
+        if (trackUris.length === 0) {
+            updatePlayerStatus('No tracks', 'error');
+            return;
+        }
+
+        updatePlayerStatus('Playing...', 'default');
+
+        try {
+            const response = await fetch(
+                `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        uris: trackUris
+                    })
+                }
+            );
+
+            if (response.status === 204) {
+                updatePlayerStatus('Playing', 'ready');
+            } else if (response.status === 404) {
+                updatePlayerStatus('Device not found', 'error');
+            } else {
+                const errorText = await response.text();
+                throw new Error(`Playback failed: ${response.status} - ${errorText}`);
+            }
+        } catch (error) {
+            console.error('Error starting playback:', error);
+            updatePlayerStatus('Playback error', 'error');
+        }
+    }
+    
+    /**
+     * Control playback
+     */
+    async function controlPlayback(action) {
+        if (!accessToken || !deviceId) {
+            updatePlayerStatus('Not ready', 'error');
+            return;
+        }
+
+        try {
+            const endpoint = `https://api.spotify.com/v1/me/player/${action}?device_id=${deviceId}`;
+            const response = await fetch(endpoint, {
+                method: action === 'play' || action === 'pause' ? 'PUT' : 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+
+            if (response.status !== 204 && response.status !== 200) {
+                const errorText = await response.text();
+                throw new Error(`Control failed: ${response.status} - ${errorText}`);
+            }
+        } catch (error) {
+            console.error(`Error ${action}:`, error);
+            updatePlayerStatus('Control error', 'error');
+        }
+    }
+
+    // Control button handlers
+    playPauseBtn.addEventListener('click', () => {
+        if (isPlaying) {
+            controlPlayback('pause');
+        } else {
+            controlPlayback('play');
+        }
+    });
+
+    nextBtn.addEventListener('click', () => {
+        controlPlayback('next');
+    });
+
+    prevBtn.addEventListener('click', () => {
+        controlPlayback('previous');
+    });
+    
+    /**
+     * Check for pending recommendations from storage
+     */
+    async function checkPendingRecommendations() {
+        try {
+            const result = await chrome.storage.local.get(['pendingRecommendations', 'recommendationsTimestamp']);
+            
+            if (result.pendingRecommendations && result.recommendationsTimestamp) {
+                // Only use recommendations if they're recent (within last 5 minutes)
+                const age = Date.now() - result.recommendationsTimestamp;
+                if (age < 5 * 60 * 1000) {
+                    const recommendations = result.pendingRecommendations;
+                    
+                    // Clear the stored recommendations
+                    await chrome.storage.local.remove(['pendingRecommendations', 'recommendationsTimestamp']);
+                    
+                    // Play the recommendations
+                    if (!isAuthenticated) {
+                        await initializePlayerAuth();
+                    }
+                    
+                    if (isAuthenticated) {
+                        playRecommendations(recommendations);
+                    } else {
+                        pendingRecommendations = recommendations;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking pending recommendations:', error);
+        }
+    }
+    
+    /**
+     * Listen for storage changes (when background script stores recommendations)
+     */
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'local' && changes.pendingRecommendations) {
+            checkPendingRecommendations();
+        }
+    });
+    
+    // Initialize player on popup open
+    initializePlayerAuth();
+    checkPendingRecommendations();
 });
