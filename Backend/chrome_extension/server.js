@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs-extra');
 const path = require('path');
 const moment = require('moment');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = 3000;
@@ -298,6 +299,152 @@ app.post('/api/cleanup', async (req, res) => {
     }
 });
 
+// Helper function to find the latest scraped file
+async function findLatestScrapedFile() {
+    try {
+        const files = await fs.readdir(dataDir);
+        const jsonFiles = files.filter(file => 
+            file.endsWith('.json') && 
+            file !== 'scraping_summary.json'
+        );
+        
+        if (jsonFiles.length === 0) {
+            return null;
+        }
+        
+        // Get file stats and find the most recently modified
+        const fileStats = await Promise.all(
+            jsonFiles.map(async (file) => {
+                const filePath = path.join(dataDir, file);
+                const stats = await fs.stat(filePath);
+                return {
+                    filename: file,
+                    filePath: filePath,
+                    modified: stats.mtime
+                };
+            })
+        );
+        
+        // Sort by modification time (most recent first)
+        fileStats.sort((a, b) => b.modified - a.modified);
+        
+        return fileStats[0].filePath;
+    } catch (error) {
+        console.error('Error finding latest scraped file:', error);
+        return null;
+    }
+}
+
+// Get latest recommendations endpoint
+app.get('/api/recommendations/latest', async (req, res) => {
+    try {
+        // Find the latest scraped file
+        const latestFile = await findLatestScrapedFile();
+        
+        if (!latestFile) {
+            return res.status(404).json({ 
+                error: 'No scraped content found',
+                message: 'Please scrape some content first before requesting recommendations'
+            });
+        }
+        
+        // Read the scraped content
+        const scrapedData = await fs.readJson(latestFile);
+        const content = scrapedData.content;
+        
+        if (!content || !content.trim()) {
+            return res.status(400).json({ 
+                error: 'No content in scraped file',
+                message: 'The scraped file does not contain any content to analyze'
+            });
+        }
+        
+        // Path to the Python CLI script
+        const pythonScriptPath = path.join(__dirname, '..', 'AI Agent', 'run_agent_cli.py');
+        const pythonScriptDir = path.join(__dirname, '..', 'AI Agent');
+        
+        // Spawn Python process to run the agent
+        return new Promise((resolve, reject) => {
+            const pythonProcess = spawn('python3', [pythonScriptPath], {
+                cwd: pythonScriptDir,
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+            
+            let stdout = '';
+            let stderr = '';
+            
+            // Send content to Python process via stdin
+            pythonProcess.stdin.write(content);
+            pythonProcess.stdin.end();
+            
+            // Collect stdout
+            pythonProcess.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+            
+            // Collect stderr
+            pythonProcess.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+            
+            // Handle process completion
+            pythonProcess.on('close', (code) => {
+                if (code !== 0) {
+                    console.error(`Python process exited with code ${code}`);
+                    console.error('Python stderr:', stderr);
+                    res.status(500).json({ 
+                        error: 'Failed to generate recommendations',
+                        message: stderr || 'Python agent process failed',
+                        code: code
+                    });
+                    resolve(); // Resolve after sending error response
+                    return;
+                }
+                
+                try {
+                    // Parse JSON response from Python
+                    const result = JSON.parse(stdout);
+                    
+                    // Return the music_recommendations
+                    res.json({
+                        success: true,
+                        ...result,
+                        sourceFile: path.basename(latestFile)
+                    });
+                    resolve(); // Resolve after sending success response
+                } catch (parseError) {
+                    console.error('Error parsing Python output:', parseError);
+                    console.error('Python stdout:', stdout);
+                    res.status(500).json({ 
+                        error: 'Failed to parse recommendations',
+                        message: 'Invalid JSON response from Python agent',
+                        details: parseError.message
+                    });
+                    resolve(); // Resolve after sending error response
+                }
+            });
+            
+            // Handle process errors
+            pythonProcess.on('error', (error) => {
+                console.error('Error spawning Python process:', error);
+                res.status(500).json({ 
+                    error: 'Failed to start Python agent',
+                    message: error.message,
+                    hint: 'Make sure Python 3 is installed and accessible as "python3"'
+                });
+                resolve(); // Resolve after sending error response
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error in recommendations endpoint:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: error.message 
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log('🚀 Superior Reading Backend Server started');
@@ -311,6 +458,7 @@ app.listen(PORT, () => {
     console.log('   GET  /api/content/:filename - Get specific content');
     console.log('   DELETE /api/content/:filename - Delete specific file');
     console.log('   POST /api/cleanup - Manual cleanup trigger');
+    console.log('   GET  /api/recommendations/latest - Get latest music recommendations');
     console.log('');
     console.log('🧹 Automatic cleanup:');
     console.log(`   - Enabled: ${CLEANUP_CONFIG.enabled}`);
