@@ -151,10 +151,86 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Play Recommendations button
+    const playRecommendationsBtn = document.getElementById('playRecommendationsBtn');
+    
+    /**
+     * Fetch recommendations and start playback
+     */
+    async function playRecommendationsFromBackend() {
+        playRecommendationsBtn.disabled = true;
+        playRecommendationsBtn.textContent = 'LOADING...';
+        updateStatus('FETCHING RECOMMENDATIONS...', 'processing');
+        
+        try {
+            // Fetch recommendations from backend
+            const response = await fetch('http://localhost:3000/api/recommendations/latest');
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('No scraped content found. Please scrape a page first.');
+                }
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Server error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.music_recommendations || !data.music_recommendations.recommendations) {
+                throw new Error('No recommendations found in response');
+            }
+            
+            const recommendations = data.music_recommendations.recommendations;
+            
+            // Filter to only recommendations with spotify_id
+            const spotifyRecommendations = recommendations.filter(rec => rec.spotify_id);
+            
+            if (spotifyRecommendations.length === 0) {
+                updateStatus('NO SPOTIFY TRACKS FOUND', 'error');
+                playRecommendationsBtn.disabled = false;
+                playRecommendationsBtn.textContent = 'Play Recommendations';
+                return;
+            }
+            
+            updateStatus(`FOUND ${spotifyRecommendations.length} TRACK(S)`, 'success');
+            
+            // Send to background script to start playback
+            chrome.runtime.sendMessage({
+                action: 'startPlayback',
+                recommendations: spotifyRecommendations
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Error sending playback request:', chrome.runtime.lastError);
+                    updateStatus('PLAYBACK REQUEST FAILED', 'error');
+                    playRecommendationsBtn.disabled = false;
+                    playRecommendationsBtn.textContent = 'Play Recommendations';
+                } else if (response && response.success) {
+                    updateStatus('PLAYBACK STARTED!', 'success');
+                    // Reset button after a delay
+                    setTimeout(() => {
+                        playRecommendationsBtn.disabled = false;
+                        playRecommendationsBtn.textContent = 'Play Recommendations';
+                    }, 2000);
+                } else {
+                    updateStatus('PLAYBACK FAILED', 'error');
+                    playRecommendationsBtn.disabled = false;
+                    playRecommendationsBtn.textContent = 'Play Recommendations';
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error fetching recommendations:', error);
+            updateStatus(`ERROR: ${error.message}`, 'error');
+            playRecommendationsBtn.disabled = false;
+            playRecommendationsBtn.textContent = 'Play Recommendations';
+        }
+    }
+    
     // Event listeners
     scrapeBtn.addEventListener('click', manualScrape);
     testBtn.addEventListener('click', testConnection);
     autoToggle.addEventListener('click', toggleAutoScrape);
+    playRecommendationsBtn.addEventListener('click', playRecommendationsFromBackend);
 
     // Initial status
     updateStatus('READY TO SCRAPE', 'info');
@@ -412,6 +488,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Initialize control buttons as disabled
+    playPauseBtn.disabled = true;
+    nextBtn.disabled = true;
+    prevBtn.disabled = true;
+    
     // Control button handlers
     playPauseBtn.addEventListener('click', () => {
         if (isPlaying) {

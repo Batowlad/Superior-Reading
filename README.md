@@ -11,6 +11,7 @@ A Chrome extension that automatically scrapes the main content from web pages an
 - 📊 **Content Analytics**: Tracks word count, domain, and scraping statistics
 - 💾 **Local Storage**: Saves all scraped content to your PC
 - 🎨 **Modern UI**: Clean and intuitive popup interface
+- 🎵 **Spotify Integration**: AI-powered music recommendations based on scraped content with Spotify Premium playback
 
 ## Project Structure
 
@@ -144,6 +145,7 @@ The backend server provides several endpoints:
 - `GET /api/files` - List all scraped files
 - `GET /api/content/:filename` - Get specific content
 - `DELETE /api/content/:filename` - Delete specific file
+- `GET /api/recommendations/latest` - Get music recommendations for latest scraped content
 
 ## Configuration
 
@@ -213,6 +215,92 @@ print(text)  # Prints the latest scraped page content or an empty string if none
 Notes:
 - The agent only reads local files and does not modify them.
 - If the directory does not exist or no matching files are found, `text` will be an empty string.
+
+### Spotify Premium Playback Integration
+
+The extension includes Spotify Premium playback integration that uses AI to generate music recommendations based on scraped content.
+
+#### Prerequisites
+
+- **Spotify Premium Account**: The Web Playback SDK requires a Spotify Premium subscription
+- **Spotify Developer App**: You need to create a Spotify app to get a Client ID
+
+#### Setting Up Spotify Developer App
+
+1. **Create a Spotify App:**
+   - Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+   - Log in with your Spotify account
+   - Click "Create an app"
+   - Fill in the app details:
+     - App name: "Superior Reading Extension" (or any name you prefer)
+     - App description: "Chrome extension for content-based music recommendations"
+     - Redirect URI: You'll add this in the next step
+   - Accept the terms and click "Save"
+
+2. **Get Your Client ID:**
+   - After creating the app, you'll see your **Client ID**
+   - Copy this Client ID
+
+3. **Configure Redirect URI:**
+   - In your Spotify app settings, click "Edit Settings"
+   - You need to add a redirect URI for Chrome extensions
+   - First, load the extension in Chrome (see Chrome Extension Setup section)
+   - Open the extension popup and check the browser console, or:
+   - The redirect URI format is: `https://<extension-id>.chromiumapp.org/`
+   - To find your extension ID:
+     - Go to `chrome://extensions/`
+     - Find "Superior Reading - Content Scraper"
+     - Copy the ID shown (e.g., `abcdefghijklmnopqrstuvwxyz123456`)
+     - Your redirect URI will be: `https://abcdefghijklmnopqrstuvwxyz123456.chromiumapp.org/`
+   - Add this exact URI to your Spotify app's "Redirect URIs" list
+   - Click "Add" and then "Save"
+
+4. **Configure the Extension:**
+   - Open `Frontend/chrome_extension/spotify_auth.js`
+   - Find the line: `clientId: '2d35b413966c45379815f8d6aa664e67'`
+   - Replace the Client ID with your own Client ID from step 2
+   - Save the file
+
+#### Required Spotify Scopes
+
+The extension requests the following scopes (configured automatically):
+- `streaming` - Required for Web Playback SDK
+- `user-modify-playback-state` - Control playback
+- `user-read-playback-state` - Read current playback state
+- `user-read-email` - Read user email (optional)
+- `user-read-private` - Read user profile (optional)
+
+#### Using Music Recommendations
+
+1. **Scrape Content:**
+   - Navigate to any webpage
+   - The extension will automatically scrape the content, or click "Scrape Current Page"
+
+2. **Get Recommendations:**
+   - Click the "Play Recommendations" button in the extension popup
+   - The extension will:
+     - Fetch the latest scraped content
+     - Send it to the AI agent for analysis
+     - Generate music recommendations based on theme and mood
+     - Search Spotify for matching tracks
+
+3. **Connect to Spotify:**
+   - If not already connected, click "Connect to Spotify" in the player section
+   - Authorize the extension with your Spotify Premium account
+   - The player will initialize automatically
+
+4. **Play Music:**
+   - Once recommendations are generated and you're connected to Spotify
+   - The recommended tracks will start playing automatically
+   - Use the player controls (play/pause, next, previous) to control playback
+
+#### Troubleshooting Spotify Integration
+
+- **"Authentication error"**: Check that your Client ID is correct in `spotify_auth.js`
+- **"Redirect URI mismatch"**: Ensure the redirect URI in Spotify app matches exactly (including trailing slash)
+- **"Account error"**: Verify you have a Spotify Premium subscription
+- **"No tracks found"**: The AI may not have found matching Spotify tracks. Try scraping different content
+- **"Device not found"**: The player may not be ready. Wait a few seconds and try again
 
 ## Security Notes
 
