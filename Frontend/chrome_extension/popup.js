@@ -272,15 +272,24 @@ document.addEventListener('DOMContentLoaded', function() {
             const authenticated = await window.SpotifyAuth.isAuthenticated();
             
             if (authenticated) {
-                await loadPlayerAccessToken();
-                await initializePlayer();
+                try {
+                    await loadPlayerAccessToken();
+                    await initializePlayer();
+                } catch (error) {
+                    console.error('Error loading token or initializing player:', error);
+                    // If token refresh failed, show helpful message
+                    const errorMsg = error.message || 'Authentication failed';
+                    updatePlayerStatus(errorMsg.includes('re-authenticate') ? 'Please re-authenticate' : errorMsg, 'error');
+                    showAuthUI();
+                    isAuthenticated = false;
+                }
             } else {
                 updatePlayerStatus('Not Connected', 'error');
                 showAuthUI();
             }
         } catch (error) {
             console.error('Error checking authentication:', error);
-            updatePlayerStatus('Error', 'error');
+            updatePlayerStatus('Error checking auth', 'error');
             showAuthUI();
         }
     }
@@ -313,7 +322,8 @@ document.addEventListener('DOMContentLoaded', function() {
             updatePlayerStatus('Connected', 'ready');
         } catch (error) {
             console.error('Authentication error:', error);
-            updatePlayerStatus('Failed', 'error');
+            const errorMsg = error.message || 'Authentication failed';
+            updatePlayerStatus(errorMsg.length > 40 ? errorMsg.substring(0, 40) + '...' : errorMsg, 'error');
             authButton.disabled = false;
         }
     });
@@ -377,7 +387,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
             case SANDBOX_MESSAGE_TYPES.PLAYER_ERROR:
                 console.error('Player error:', message.error);
-                updatePlayerStatus('Error', 'error');
+                // Display the actual error message to help user troubleshoot
+                const errorMsg = message.error || 'Unknown error occurred';
+                updatePlayerStatus(errorMsg.length > 50 ? errorMsg.substring(0, 50) + '...' : errorMsg, 'error');
+                // Show auth UI if it's an authentication/account error
+                if (errorMsg.includes('Authentication') || errorMsg.includes('Premium') || errorMsg.includes('Account')) {
+                    showAuthUI();
+                    isAuthenticated = false;
+                }
                 break;
 
             case SANDBOX_MESSAGE_TYPES.PLAYER_STATE:
