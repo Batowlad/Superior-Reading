@@ -43,19 +43,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// Listen for tab updates to auto-scrape on navigation
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
-        // Small delay to ensure content script has loaded
-        setTimeout(() => {
-            chrome.scripting.executeScript({
-                target: { tabId: tabId },
-                function: () => {
-                    if (window.superiorReadingScrape) {
-                        window.superiorReadingScrape();
-                    }
-                }
-            });
-        }, 1000);
-    }
-});
+// Note: Auto-scraping is handled by content.js to avoid duplicate scraping
+// The content script automatically scrapes when pages load
