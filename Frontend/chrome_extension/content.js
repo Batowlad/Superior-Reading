@@ -10,12 +10,36 @@
         maxRetries: 3
     };
 
-    // Y2K-style notification overlay
+    // Neo-brutalist notification overlay matching extension style
     function createY2KNotification(message, type = 'info', duration = 3000) {
         // Remove existing notification if any
         const existing = document.getElementById('superior-reading-notification');
         if (existing) {
             existing.remove();
+        }
+
+        // Determine colors based on type (matching popup styles)
+        let bgColor, textColor, borderColor, shadowColor;
+        if (type === 'success') {
+            bgColor = '#7bf1a8'; // Green
+            textColor = '#000000';
+            borderColor = '#000000';
+            shadowColor = '#000000';
+        } else if (type === 'error') {
+            bgColor = '#ff006e'; // Pink
+            textColor = '#ffffff';
+            borderColor = '#000000';
+            shadowColor = '#000000';
+        } else if (type === 'processing') {
+            bgColor = '#00f0ff'; // Cyan
+            textColor = '#000000';
+            borderColor = '#000000';
+            shadowColor = '#000000';
+        } else {
+            bgColor = '#ffd60a'; // Yellow
+            textColor = '#000000';
+            borderColor = '#000000';
+            shadowColor = '#000000';
         }
 
         const notification = document.createElement('div');
@@ -26,33 +50,20 @@
                 top: 20px;
                 right: 20px;
                 z-index: 999999;
-                padding: 20px 25px;
-                background: linear-gradient(135deg, 
-                    rgba(255, 0, 255, 0.95), 
-                    rgba(0, 255, 255, 0.95),
-                    rgba(255, 255, 0, 0.95));
-                background-size: 200% 200%;
-                border: 3px solid rgba(255, 255, 255, 0.9);
-                border-radius: 20px;
-                color: white;
-                font-family: 'Arial Black', sans-serif;
-                font-weight: 900;
-                font-size: 14px;
+                padding: 16px 20px;
+                background: ${bgColor};
+                border: 4px solid ${borderColor};
+                color: ${textColor};
+                font-family: 'Space Mono', 'Courier New', monospace;
+                font-weight: 700;
+                font-size: 13px;
                 text-transform: uppercase;
                 letter-spacing: 1px;
-                box-shadow: 
-                    0 0 30px rgba(255, 0, 255, 0.8),
-                    0 0 60px rgba(0, 255, 255, 0.6),
-                    inset 0 0 30px rgba(255, 255, 255, 0.3);
-                animation: notificationSlideIn 0.5s ease-out, 
-                           notificationPulse 2s ease-in-out infinite,
-                           gradientShift 3s ease infinite;
-                backdrop-filter: blur(10px);
+                box-shadow: 8px 8px 0 0 ${shadowColor};
                 min-width: 250px;
                 text-align: center;
                 pointer-events: none;
             ">
-                <div style="font-size: 24px; margin-bottom: 8px;">${type === 'success' ? '✨' : type === 'error' ? '❌' : '🎵'}</div>
                 <div>${message}</div>
             </div>
         `;
@@ -60,6 +71,7 @@
         // Add styles
         const style = document.createElement('style');
         style.textContent = `
+            @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
             @keyframes notificationSlideIn {
                 from {
                     transform: translateX(400px) scale(0.8);
@@ -70,37 +82,22 @@
                     opacity: 1;
                 }
             }
-            @keyframes notificationPulse {
-                0%, 100% {
-                    box-shadow: 
-                        0 0 30px rgba(255, 0, 255, 0.8),
-                        0 0 60px rgba(0, 255, 255, 0.6),
-                        inset 0 0 30px rgba(255, 255, 255, 0.3);
-                }
-                50% {
-                    box-shadow: 
-                        0 0 50px rgba(255, 0, 255, 1),
-                        0 0 100px rgba(0, 255, 255, 0.8),
-                        inset 0 0 40px rgba(255, 255, 255, 0.5);
-                }
-            }
-            @keyframes gradientShift {
-                0% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
-                100% { background-position: 0% 50%; }
-            }
         `;
         document.head.appendChild(style);
 
         document.body.appendChild(notification);
 
+        // Add slide-in animation
+        const notificationDiv = notification.querySelector('div');
+        notificationDiv.style.animation = 'notificationSlideIn 0.3s ease-out';
+
         // Auto-remove after duration
         setTimeout(() => {
-            notification.style.animation = 'notificationSlideIn 0.5s ease-out reverse';
+            notificationDiv.style.animation = 'notificationSlideIn 0.3s ease-out reverse';
             setTimeout(() => {
                 notification.remove();
                 style.remove();
-            }, 500);
+            }, 300);
         }, duration);
     }
 
@@ -226,8 +223,8 @@
         console.log('📍 Current URL:', window.location.href);
         console.log('📍 Current title:', document.title);
         
-        // Show Y2K notification
-        createY2KNotification('🎵 Scraping Content... 📚', 'info', 2000);
+        // Show notification
+        createY2KNotification('SCRAPING CONTENT...', 'processing', 2000);
         
         const contentData = extractMainContent();
         if (!contentData || !contentData.content) {
@@ -239,7 +236,7 @@
                 content: document.querySelector('.content'),
                 body: document.body
             });
-            createY2KNotification('❌ No Content Found', 'error', 3000);
+            createY2KNotification('NO CONTENT FOUND', 'error', 3000);
             return false;
         }
 
@@ -250,11 +247,11 @@
         const success = await sendToServer(contentData);
         if (success) {
             console.log('🎉 Content successfully sent to backend server');
-            createY2KNotification(`✨ Scraped ${contentData.wordCount} Words! 🎉`, 'success', 4000);
+            createY2KNotification(`SCRAPED ${contentData.wordCount} WORDS`, 'success', 4000);
             return true;
         } else {
             console.error('💥 Failed to send content to backend server');
-            createY2KNotification('❌ Failed to Send', 'error', 3000);
+            createY2KNotification('FAILED TO SEND', 'error', 3000);
             return false;
         }
     }
