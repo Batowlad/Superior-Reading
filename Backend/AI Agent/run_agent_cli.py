@@ -6,7 +6,33 @@ Takes content from stdin or command line argument and returns JSON recommendatio
 
 import sys
 import json
-from ai_agent import run_music_agent
+import warnings
+import traceback
+
+# Suppress urllib3 OpenSSL warnings (compatibility issue with LibreSSL)
+warnings.filterwarnings("ignore", category=UserWarning, module="urllib3")
+
+# Suppress LangChain pydantic deprecation warnings (langchain-core internal usage)
+warnings.filterwarnings("ignore", message=".*langchain_core.pydantic_v1.*", category=DeprecationWarning)
+
+try:
+    from ai_agent import run_music_agent
+except ImportError as e:
+    error_result = {
+        "error": f"Failed to import ai_agent module: {str(e)}",
+        "music_recommendations": {"recommendations": []},
+        "hint": "Make sure all dependencies are installed: pip install -r requirements.txt"
+    }
+    print(json.dumps(error_result))
+    sys.exit(1)
+except Exception as e:
+    error_result = {
+        "error": f"Unexpected error during import: {str(e)}",
+        "music_recommendations": {"recommendations": []},
+        "traceback": traceback.format_exc()
+    }
+    print(json.dumps(error_result))
+    sys.exit(1)
 
 def main():
     """Main entry point for CLI."""
@@ -41,11 +67,21 @@ def main():
         
         # Output as JSON
         print(json.dumps(output, indent=2))
+        sys.exit(0)  # Explicit success exit
         
+    except KeyboardInterrupt:
+        error_result = {
+            "error": "Process interrupted by user",
+            "music_recommendations": {"recommendations": []}
+        }
+        print(json.dumps(error_result))
+        sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:
         error_result = {
             "error": str(e),
-            "music_recommendations": {"recommendations": []}
+            "error_type": type(e).__name__,
+            "music_recommendations": {"recommendations": []},
+            "traceback": traceback.format_exc()
         }
         print(json.dumps(error_result))
         sys.exit(1)

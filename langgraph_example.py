@@ -80,7 +80,7 @@ Generate a list of search queries that will gather any relevant information. Onl
 # In[ ]:
 
 
-from langchain_core.pydantic_v1 import BaseModel
+from pydantic import BaseModel
 
 class Queries(BaseModel):
     queries: List[str]

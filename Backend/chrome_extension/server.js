@@ -363,18 +363,61 @@ app.get('/api/recommendations/latest', async (req, res) => {
         const pythonScriptPath = path.join(__dirname, '..', 'AI Agent', 'run_agent_cli.py');
         const pythonScriptDir = path.join(__dirname, '..', 'AI Agent');
         
+        // Try to use venv Python interpreter, fallback to system python3
+        const projectRoot = path.join(__dirname, '..', '..');
+        const venvPython = process.platform === 'win32' 
+            ? path.join(projectRoot, '.venv', 'Scripts', 'python.exe')
+            : path.join(projectRoot, '.venv', 'bin', 'python3');
+        
+        // Check if venv Python exists, otherwise use system python3
+        let pythonCommand = 'python3';
+        let pythonArgs = [pythonScriptPath];
+        
+        try {
+            if (fs.existsSync(venvPython)) {
+                pythonCommand = venvPython;
+                console.log(`Using venv Python: ${pythonCommand}`);
+            } else {
+                console.log('Venv Python not found, using system python3');
+            }
+        } catch (err) {
+            console.warn('Could not check for venv Python, using system python3:', err.message);
+        }
+        
         // Spawn Python process to run the agent
         return new Promise((resolve, reject) => {
-            const pythonProcess = spawn('python3', [pythonScriptPath], {
+            console.log(`🚀 Starting Python agent process...`);
+            console.log(`   Command: ${pythonCommand}`);
+            console.log(`   Script: ${pythonScriptPath}`);
+            console.log(`   Content length: ${content.length} characters`);
+            
+            const pythonProcess = spawn(pythonCommand, pythonArgs, {
                 cwd: pythonScriptDir,
-                stdio: ['pipe', 'pipe', 'pipe']
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: {
+                    ...process.env, // Pass through all environment variables (including .env)
+                    PYTHONUNBUFFERED: '1' // Ensure Python output is not buffered
+                }
             });
             
             let stdout = '';
             let stderr = '';
             
+            // Set a timeout for the Python process (5 minutes)
+            const timeout = setTimeout(() => {
+                if (!pythonProcess.killed) {
+                    console.error('⏱️ Python process timeout after 5 minutes');
+                    pythonProcess.kill('SIGTERM');
+                    res.status(500).json({ 
+                        error: 'Python agent timeout',
+                        message: 'The Python agent process took too long to complete (>5 minutes)'
+                    });
+                    resolve();
+                }
+            }, 5 * 60 * 1000);
+            
             // Send content to Python process via stdin
-            pythonProcess.stdin.write(content);
+            pythonProcess.stdin.write(content, 'utf8');
             pythonProcess.stdin.end();
             
             // Collect stdout
@@ -388,14 +431,35 @@ app.get('/api/recommendations/latest', async (req, res) => {
             });
             
             // Handle process completion
-            pythonProcess.on('close', (code) => {
+            pythonProcess.on('close', (code, signal) => {
+                clearTimeout(timeout); // Clear the timeout
+                
                 if (code !== 0) {
-                    console.error(`Python process exited with code ${code}`);
+                    console.error(`❌ Python process exited with code ${code}${signal ? ` (signal: ${signal})` : ''}`);
                     console.error('Python stderr:', stderr);
+                    console.error('Python stdout (if any):', stdout);
+                    
+                    // Try to parse error from stdout if it's JSON
+                    let errorDetails = stderr || 'Python agent process failed';
+                    try {
+                        const errorJson = JSON.parse(stdout);
+                        if (errorJson.error) {
+                            errorDetails = errorJson.error;
+                        }
+                    } catch (e) {
+                        // Not JSON, use stderr or default message
+                    }
+                    
                     res.status(500).json({ 
                         error: 'Failed to generate recommendations',
-                        message: stderr || 'Python agent process failed',
-                        code: code
+                        message: errorDetails,
+                        code: code,
+                        signal: signal,
+                        stderr: stderr.substring(0, 500), // Limit stderr length
+                        hint: code === 127 ? 'Python interpreter not found. Make sure Python 3 and dependencies are installed.' : 
+                              code === 1 ? 'Python script execution failed. Check dependencies and environment variables.' :
+                              signal === 'SIGTERM' ? 'Process was terminated (likely timeout).' :
+                              'Check Python script and dependencies.'
                     });
                     resolve(); // Resolve after sending error response
                     return;
@@ -406,6 +470,7 @@ app.get('/api/recommendations/latest', async (req, res) => {
                     const result = JSON.parse(stdout);
                     
                     // Return the music_recommendations
+                    console.log('✅ Successfully generated recommendations');
                     res.json({
                         success: true,
                         ...result,
@@ -413,12 +478,15 @@ app.get('/api/recommendations/latest', async (req, res) => {
                     });
                     resolve(); // Resolve after sending success response
                 } catch (parseError) {
-                    console.error('Error parsing Python output:', parseError);
+                    console.error('❌ Error parsing Python output:', parseError);
                     console.error('Python stdout:', stdout);
+                    console.error('Python stderr:', stderr);
                     res.status(500).json({ 
                         error: 'Failed to parse recommendations',
                         message: 'Invalid JSON response from Python agent',
-                        details: parseError.message
+                        details: parseError.message,
+                        stdout: stdout.substring(0, 500), // Limit stdout length
+                        stderr: stderr.substring(0, 500)  // Limit stderr length
                     });
                     resolve(); // Resolve after sending error response
                 }

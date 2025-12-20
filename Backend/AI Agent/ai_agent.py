@@ -55,16 +55,23 @@ page_content: str = _read_content_from_json(_latest_file) if _latest_file else "
 
 
 from langchain_openai import ChatOpenAI
-from langchain_core.pydantic_v1 import BaseModel
+from pydantic import BaseModel
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 
-# Initialize LLM - use environment variable if available, otherwise use hardcoded key
-llm = ChatOpenAI(
-    model="gpt-4o-mini", 
-    temperature=0.3, 
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+# Initialize LLM - use environment variable if available
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Initialize LLM (will be validated when first used)
+llm = None
+if OPENAI_API_KEY:
+    llm = ChatOpenAI(
+        model="gpt-4o-mini", 
+        temperature=0.3, 
+        api_key=OPENAI_API_KEY
+    )
+else:
+    print("Warning: OPENAI_API_KEY not found. LLM operations will fail.")
 
 # Pydantic models for structured output
 class AnalysisResult(BaseModel):
