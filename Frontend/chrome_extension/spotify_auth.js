@@ -284,9 +284,39 @@ async function clearTokens() {
  * @returns {Promise<void>}
  */
 async function authenticate() {
+    console.log('[Spotify Auth] ===== AUTHENTICATE CALLED =====');
+    
+    // Check if chrome.identity is available
+    if (!chrome || !chrome.identity) {
+        const error = 'Chrome identity API not available. Make sure "identity" permission is in manifest.json';
+        console.error('[Spotify Auth]', error);
+        throw new Error(error);
+    }
+    
+    if (!chrome.identity.launchWebAuthFlow) {
+        const error = 'chrome.identity.launchWebAuthFlow not available';
+        console.error('[Spotify Auth]', error);
+        throw new Error(error);
+    }
+    
     if (!SPOTIFY_CONFIG.clientId) {
         throw new Error('Spotify Client ID not configured. Please set SPOTIFY_CONFIG.clientId in spotify_auth.js');
     }
+
+    // Validate redirect URI
+    const redirectUri = getRedirectUri();
+    console.log('[Spotify Auth] Redirect URI from getRedirectUri():', redirectUri);
+    
+    if (!redirectUri || !redirectUri.includes('chromiumapp.org')) {
+        const error = 'Invalid redirect URI. Make sure the extension is properly installed. Got: ' + redirectUri;
+        console.error('[Spotify Auth]', error);
+        throw new Error(error);
+    }
+
+    console.log('[Spotify Auth] Starting authentication flow');
+    console.log('[Spotify Auth] Redirect URI:', redirectUri);
+    console.log('[Spotify Auth] Client ID:', SPOTIFY_CONFIG.clientId);
+    console.log('[Spotify Auth] Chrome identity API available:', !!chrome.identity);
 
     // Generate PKCE parameters
     const codeVerifier = generateCodeVerifier();
@@ -294,47 +324,109 @@ async function authenticate() {
 
     // Build authorization URL
     const authUrl = buildAuthUrl(codeChallenge);
+    console.log('[Spotify Auth] Authorization URL length:', authUrl.length);
 
     // Launch OAuth flow
     // Note: We keep codeVerifier in closure - no need to store it since this is a single async flow
     return new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow(
-            { url: authUrl, interactive: true },
-            async (redirectUrl) => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                    return;
-                }
-
-                if (!redirectUrl) {
-                    reject(new Error('OAuth flow was cancelled or failed'));
-                    return;
-                }
-
-                // Extract authorization code
-                const authCode = extractAuthCode(redirectUrl);
-                if (!authCode) {
-                    reject(new Error('Authorization code not found in redirect URL'));
-                    return;
-                }
-
-                try {
-                    // Exchange code for tokens using the code verifier from closure
-                    const tokenData = await exchangeCodeForTokens(authCode, codeVerifier);
+        console.log('[Spotify Auth] Launching web auth flow with URL:', authUrl.substring(0, 100) + '...');
+        
+        try {
+            chrome.identity.launchWebAuthFlow(
+                { url: authUrl, interactive: true },
+                async (redirectUrl) => {
+                    console.log('[Spotify Auth] launchWebAuthFlow callback invoked');
+                    console.log('[Spotify Auth] redirectUrl:', redirectUrl ? redirectUrl.substring(0, 100) : 'null');
+                    console.log('[Spotify Auth] chrome.runtime.lastError:', chrome.runtime.lastError);
                     
-                    // Store tokens
-                    await storeTokens(
-                        tokenData.access_token,
-                        tokenData.refresh_token,
-                        tokenData.expires_in
-                    );
+                    if (chrome.runtime.lastError) {
+                        const errorMsg = chrome.runtime.lastError.message;
+                        console.error('[Spotify Auth] Chrome identity error:', errorMsg);
+                        console.error('[Spotify Auth] Full error object:', chrome.runtime.lastError);
+                        
+                        // Provide helpful error messages based on common issues
+                        if (errorMsg.includes('authorization page could not be loaded')) {
+                            const detailedError = 'Authorization page could not be loaded. Please check:\n' +
+                                '1. Your redirect URI in Spotify app settings: ' + redirectUri + '\n' +
+                                '2. Make sure the redirect URI matches exactly (including trailing slash)\n' +
+                                '3. Check your internet connection\n' +
+                                '4. Verify your Spotify Client ID is correct';
+                            console.error('[Spotify Auth] Detailed error:', detailedError);
+                            reject(new Error(detailedError));
+                        } else if (errorMsg.includes('redirect_uri_mismatch')) {
+                            const detailedError = 'Redirect URI mismatch. Please add this exact URI to your Spotify app:\n' +
+                                redirectUri + '\n' +
+                                'Go to: https://developer.spotify.com/dashboard → Your App → Edit Settings → Redirect URIs';
+                            console.error('[Spotify Auth] Detailed error:', detailedError);
+                            reject(new Error(detailedError));
+                        } else {
+                            console.error('[Spotify Auth] Generic error:', errorMsg);
+                            reject(new Error('Authentication failed: ' + errorMsg));
+                        }
+                        return;
+                    }
 
-                    resolve();
-                } catch (error) {
-                    reject(error);
+                    if (!redirectUrl) {
+                        console.error('[Spotify Auth] No redirect URL received - user may have cancelled');
+                        reject(new Error('OAuth flow was cancelled or failed. Please try again.'));
+                        return;
+                    }
+
+                    console.log('[Spotify Auth] Received redirect URL:', redirectUrl.substring(0, 200));
+
+                    // Extract authorization code
+                    const authCode = extractAuthCode(redirectUrl);
+                    if (!authCode) {
+                        console.error('[Spotify Auth] No authorization code found in redirect URL');
+                        // Check if there's an error in the URL
+                        try {
+                            const url = new URL(redirectUrl);
+                            const error = url.searchParams.get('error');
+                            const errorDescription = url.searchParams.get('error_description');
+                            console.error('[Spotify Auth] Error in URL params:', { error, errorDescription });
+                            if (error) {
+                                const errorMsg = `Spotify authorization error: ${error}${errorDescription ? ' - ' + errorDescription : ''}`;
+                                console.error('[Spotify Auth] Rejecting with:', errorMsg);
+                                reject(new Error(errorMsg));
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('[Spotify Auth] Error parsing redirect URL:', e);
+                            // URL parsing failed, continue with generic error
+                        }
+                        reject(new Error('Authorization code not found in redirect URL'));
+                        return;
+                    }
+
+                    console.log('[Spotify Auth] Authorization code received, exchanging for tokens...');
+
+                    try {
+                        // Exchange code for tokens using the code verifier from closure
+                        const tokenData = await exchangeCodeForTokens(authCode, codeVerifier);
+                        
+                        console.log('[Spotify Auth] Tokens received, storing...');
+                        
+                        // Store tokens
+                        await storeTokens(
+                            tokenData.access_token,
+                            tokenData.refresh_token,
+                            tokenData.expires_in
+                        );
+
+                        console.log('[Spotify Auth] Authentication successful!');
+                        resolve();
+                    } catch (error) {
+                        console.error('[Spotify Auth] Token exchange failed:', error);
+                        console.error('[Spotify Auth] Token exchange error stack:', error.stack);
+                        reject(error);
+                    }
                 }
-            }
-        );
+            );
+        } catch (error) {
+            console.error('[Spotify Auth] Error launching web auth flow:', error);
+            console.error('[Spotify Auth] Launch error stack:', error.stack);
+            reject(error);
+        }
     });
 }
 

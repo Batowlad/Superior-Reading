@@ -244,8 +244,28 @@ document.addEventListener('DOMContentLoaded', function() {
      * Update player status
      */
     function updatePlayerStatus(message, type = 'default') {
-        playerStatus.textContent = message;
-        playerStatus.className = `player-status ${type}`;
+        // For error messages, show first line in status, full message in console
+        if (type === 'error' && message.includes('\n')) {
+            const firstLine = message.split('\n')[0];
+            playerStatus.textContent = firstLine;
+            playerStatus.className = `player-status ${type}`;
+            console.error('[Player] Full error:', message);
+            
+            // If it's a redirect URI error, log the redirect URI for easy copying
+            if (message.includes('redirect URI') || message.includes('Redirect URI')) {
+                try {
+                    const uri = window.SpotifyAuth.getRedirectUri();
+                    console.log('[Player] Your redirect URI:', uri);
+                    console.log('[Player] Copy this URI and add it to your Spotify app settings at:');
+                    console.log('[Player] https://developer.spotify.com/dashboard → Your App → Edit Settings → Redirect URIs');
+                } catch (err) {
+                    console.error('[Player] Could not get redirect URI:', err);
+                }
+            }
+        } else {
+            playerStatus.textContent = message.length > 30 ? message.substring(0, 30) + '...' : message;
+            playerStatus.className = `player-status ${type}`;
+        }
     }
     
     /**
@@ -312,16 +332,51 @@ document.addEventListener('DOMContentLoaded', function() {
      * Handle authentication button click
      */
     authButton.addEventListener('click', async () => {
+        console.log('[Popup] ===== AUTHENTICATION STARTED =====');
+        console.log('[Popup] Auth button clicked at:', new Date().toISOString());
         authButton.disabled = true;
         updatePlayerStatus('Connecting...', 'default');
         
+        // Add timeout to detect if authentication hangs
+        const timeoutId = setTimeout(() => {
+            console.warn('[Popup] Authentication timeout - no response after 60 seconds');
+            updatePlayerStatus('Authentication timeout - check console', 'error');
+            authButton.disabled = false;
+        }, 60000);
+        
         try {
-            await window.SpotifyAuth.authenticate();
+            console.log('[Popup] Starting authentication...');
+            console.log('[Popup] SpotifyAuth object:', window.SpotifyAuth);
+            console.log('[Popup] authenticate function:', typeof window.SpotifyAuth?.authenticate);
+            
+            if (!window.SpotifyAuth || typeof window.SpotifyAuth.authenticate !== 'function') {
+                throw new Error('SpotifyAuth not available. Please reload the extension.');
+            }
+            
+            const authPromise = window.SpotifyAuth.authenticate();
+            console.log('[Popup] Authentication promise created, waiting...');
+            
+            await authPromise;
+            clearTimeout(timeoutId);
+            console.log('[Popup] Authentication successful, loading token...');
+            
             await loadPlayerAccessToken();
+            console.log('[Popup] Token loaded, initializing player...');
+            
             await initializePlayer();
+            console.log('[Popup] Player initialized successfully');
             updatePlayerStatus('Connected', 'ready');
+            console.log('[Popup] ===== AUTHENTICATION COMPLETE =====');
         } catch (error) {
-            console.error('Authentication error:', error);
+            clearTimeout(timeoutId);
+            console.error('[Popup] ===== AUTHENTICATION ERROR =====');
+            console.error('[Popup] Authentication error caught:', error);
+            console.error('[Popup] Error stack:', error.stack);
+            console.error('[Popup] Error name:', error.name);
+            console.error('[Popup] Error message:', error.message);
+            console.error('[Popup] Error toString:', error.toString());
+            console.error('[Popup] ================================');
+            
             const errorMsg = error.message || 'Authentication failed';
             updatePlayerStatus(errorMsg.length > 40 ? errorMsg.substring(0, 40) + '...' : errorMsg, 'error');
             authButton.disabled = false;
@@ -568,6 +623,30 @@ document.addEventListener('DOMContentLoaded', function() {
             checkPendingRecommendations();
         }
     });
+    
+    // Diagnostic function to check setup
+    function checkSetup() {
+        console.log('[Popup] === Setup Diagnostics ===');
+        console.log('[Popup] SpotifyAuth available:', typeof window.SpotifyAuth !== 'undefined');
+        console.log('[Popup] SpotifyAuth.authenticate:', typeof window.SpotifyAuth?.authenticate);
+        console.log('[Popup] SpotifyAuth.getRedirectUri:', typeof window.SpotifyAuth?.getRedirectUri);
+        console.log('[Popup] SPOTIFY_CONFIG:', window.SpotifyAuth?.SPOTIFY_CONFIG);
+        
+        if (window.SpotifyAuth?.getRedirectUri) {
+            try {
+                const redirectUri = window.SpotifyAuth.getRedirectUri();
+                console.log('[Popup] Redirect URI:', redirectUri);
+            } catch (e) {
+                console.error('[Popup] Error getting redirect URI:', e);
+            }
+        }
+        console.log('[Popup] ========================');
+    }
+    
+    // Check setup when popup loads
+    setTimeout(() => {
+        checkSetup();
+    }, 100);
     
     // Initialize player on popup open
     initializePlayerAuth();
