@@ -466,8 +466,20 @@ app.get('/api/recommendations/latest', async (req, res) => {
                 }
                 
                 try {
+                    // Clean stdout - remove any leading/trailing whitespace and extract JSON
+                    let cleanedStdout = stdout.trim();
+                    
+                    // Try to find JSON object in the output (in case there's extra text)
+                    // Look for the first { and last } to extract JSON
+                    const firstBrace = cleanedStdout.indexOf('{');
+                    const lastBrace = cleanedStdout.lastIndexOf('}');
+                    
+                    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                        cleanedStdout = cleanedStdout.substring(firstBrace, lastBrace + 1);
+                    }
+                    
                     // Parse JSON response from Python
-                    const result = JSON.parse(stdout);
+                    const result = JSON.parse(cleanedStdout);
                     
                     // Return the music_recommendations
                     console.log('✅ Successfully generated recommendations');

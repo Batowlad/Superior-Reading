@@ -72,7 +72,7 @@ if OPENAI_API_KEY:
         api_key=OPENAI_API_KEY
     )
 else:
-    print("Warning: OPENAI_API_KEY not found. LLM operations will fail.")
+    print("Warning: OPENAI_API_KEY not found. LLM operations will fail.", file=sys.stderr)
 
 # Pydantic models for structured output
 class AnalysisResult(BaseModel):
@@ -111,26 +111,26 @@ Follow these rules:
 Input:
 "A spaceship crew lands on a distant planet filled with hostile alien life. The air is toxic, and the crew must struggle to survive."
 Output:
-{
+{{
   "theme": "sci-fi survival",
   "mood": ["tense", "mysterious", "dark"]
-}
+}}
 
 Input:
 "A young couple walks hand in hand through the park, laughing as cherry blossoms fall around them."
 Output:
-{
+{{
   "theme": "romantic slice of life",
   "mood": ["joyful", "peaceful"]
-}
+}}
 
 Input:
 "A knight faces a dragon guarding an ancient treasure deep within a cave. The clash is fierce, and the stakes are life or death."
 Output:
-{
+{{
   "theme": "fantasy adventure",
   "mood": ["epic", "intense", "dramatic"]
-}
+}}
 
 ---
 
@@ -155,26 +155,26 @@ Task:
    - Example: "Epic and dramatic fantasy adventure with intense atmosphere."
 
 Output strictly in JSON format:
-{
+{{
   "tags": ["tag1", "tag2", "tag3", ...],
   "embedding_description": "short sentence for embedding"
-}
+}}
 
 ---
 
 ### Example
 
 Input JSON:
-{
+{{
   "theme": "fantasy adventure",
   "mood": ["epic", "intense", "dramatic"]
-}
+}}
 
 Output:
-{
+{{
   "tags": ["fantasy adventure", "epic", "intense", "dramatic"],
   "embedding_description": "Epic and dramatic fantasy adventure with intense atmosphere."
-}
+}}
 """
 
 
@@ -191,47 +191,47 @@ Task:
 3. Ensure the style of music aligns strongly with the input descriptors.
 4. Output strictly in JSON format with this schema:
 
-{
+{{
   "recommendations": [
-    {
+    {{
       "title": "string",
       "artist": "string or 'unknown'",
       "match_reason": "string"
-    },
+    }},
     ...
   ]
-}
+}}
 
 ---
 
 ### Example
 
 Input JSON:
-{
+{{
   "tags": ["fantasy adventure", "epic", "intense", "dramatic"],
   "embedding_description": "Epic and dramatic fantasy adventure with intense atmosphere."
-}
+}}
 
 Output:
-{
+{{
   "recommendations": [
-    {
+    {{
       "title": "The Battle",
       "artist": "Harry Gregson-Williams",
       "match_reason": "Epic orchestral track with dramatic and intense mood, matching fantasy adventure theme."
-    },
-    {
+    }},
+    {{
       "title": "Dragon Rider",
       "artist": "Two Steps From Hell",
       "match_reason": "Epic trailer-style music with dramatic intensity fitting a fantasy adventure."
-    },
-    {
+    }},
+    {{
       "title": "Fantasy Adventure Soundtrack Mix",
       "artist": "unknown",
       "match_reason": "Curated orchestral mix with heroic and dramatic tones for fantasy settings."
-    }
+    }}
   ]
-}
+}}
 """
 
 
@@ -251,10 +251,10 @@ try:
         spotify = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
     else:
         spotify = None
-        print("Warning: Spotify credentials not found. Music search will use AI recommendations only.")
+        print("Warning: Spotify credentials not found. Music search will use AI recommendations only.", file=sys.stderr)
 except ImportError:
     spotify = None
-    print("Warning: spotipy not installed. Install with: pip install spotipy")
+    print("Warning: spotipy not installed. Install with: pip install spotipy", file=sys.stderr)
 
 
 def search_spotify_tracks(query: str, limit: int = 5) -> List[Dict[str, Any]]:
@@ -276,7 +276,7 @@ def search_spotify_tracks(query: str, limit: int = 5) -> List[Dict[str, Any]]:
             })
         return tracks
     except Exception as e:
-        print(f"Error searching Spotify: {e}")
+        print(f"Error searching Spotify: {e}", file=sys.stderr)
         return []
 
 
