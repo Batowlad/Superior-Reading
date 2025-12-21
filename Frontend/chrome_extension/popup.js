@@ -289,28 +289,53 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function initializePlayerAuth() {
         try {
+            console.log('[Popup] Checking authentication status...');
             const authenticated = await window.SpotifyAuth.isAuthenticated();
+            console.log('[Popup] Authentication status:', authenticated);
             
             if (authenticated) {
                 try {
                     await loadPlayerAccessToken();
+                    console.log('[Popup] Token loaded successfully, isAuthenticated flag set to:', isAuthenticated);
+                    updatePlayerStatus('Initializing...', 'default');
                     await initializePlayer();
+                    console.log('[Popup] Player initialization started');
+                    // Status will be updated when sandbox sends PLAYER_READY message
+                    // Don't show auth UI since we're authenticated
                 } catch (error) {
-                    console.error('Error loading token or initializing player:', error);
+                    console.error('[Popup] Error loading token or initializing player:', error);
+                    console.error('[Popup] Error details:', {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name
+                    });
                     // If token refresh failed, show helpful message
                     const errorMsg = error.message || 'Authentication failed';
-                    updatePlayerStatus(errorMsg.includes('re-authenticate') ? 'Please re-authenticate' : errorMsg, 'error');
-                    showAuthUI();
-                    isAuthenticated = false;
+                    if (errorMsg.includes('re-authenticate') || errorMsg.includes('expired')) {
+                        updatePlayerStatus('Please re-authenticate', 'error');
+                        showAuthUI();
+                        isAuthenticated = false;
+                    } else {
+                        // For other errors, still show as connected but with error status
+                        updatePlayerStatus('Connected (error initializing)', 'error');
+                    }
                 }
             } else {
+                console.log('[Popup] Not authenticated, showing auth UI');
                 updatePlayerStatus('Not Connected', 'error');
                 showAuthUI();
+                isAuthenticated = false;
             }
         } catch (error) {
-            console.error('Error checking authentication:', error);
+            console.error('[Popup] Error checking authentication:', error);
+            console.error('[Popup] Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
             updatePlayerStatus('Error checking auth', 'error');
             showAuthUI();
+            isAuthenticated = false;
         }
     }
     
@@ -360,12 +385,26 @@ document.addEventListener('DOMContentLoaded', function() {
             clearTimeout(timeoutId);
             console.log('[Popup] Authentication successful, loading token...');
             
+            // Verify authentication status after token storage
+            const authCheck = await window.SpotifyAuth.isAuthenticated();
+            console.log('[Popup] Authentication verification:', authCheck);
+            if (!authCheck) {
+                throw new Error('Authentication verification failed - tokens may not have been stored correctly');
+            }
+            
             await loadPlayerAccessToken();
             console.log('[Popup] Token loaded, initializing player...');
+            
+            // Update UI immediately after successful authentication
+            updatePlayerStatus('Initializing player...', 'default');
             
             await initializePlayer();
             console.log('[Popup] Player initialized successfully');
             updatePlayerStatus('Connected', 'ready');
+            
+            // Note: Player controls will be shown when sandbox sends PLAYER_READY message
+            // But we can hide the auth button since authentication is complete
+            authButton.disabled = false;
             console.log('[Popup] ===== AUTHENTICATION COMPLETE =====');
         } catch (error) {
             clearTimeout(timeoutId);
@@ -621,6 +660,13 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName === 'local' && changes.pendingRecommendations) {
             checkPendingRecommendations();
+        }
+        
+        // Listen for Spotify token storage changes
+        if (areaName === 'local' && (changes.spotify_access_token || changes.spotify_refresh_token)) {
+            console.log('[Popup] Spotify tokens detected in storage, re-checking authentication...');
+            // Re-check authentication status when tokens are stored
+            initializePlayerAuth();
         }
     });
     

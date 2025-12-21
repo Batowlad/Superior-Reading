@@ -26,12 +26,18 @@ const STORAGE_KEYS = {
 
 /**
  * Generate a cryptographically secure random code verifier for PKCE
- * @returns {string} Code verifier (43-128 characters)
+ * @returns {string} Code verifier (43-128 characters, base64url encoded)
  */
 function generateCodeVerifier() {
-    const array = new Uint8Array(96); // 96 bytes = 192 hex chars, well within 43-128 char requirement
+    // Generate 32 random bytes (256 bits of entropy)
+    // Base64 encoding of 32 bytes = 44 characters (within 43-128 range)
+    const array = new Uint8Array(32);
     crypto.getRandomValues(array);
-    return Array.from(array, byte => ('0' + byte.toString(16)).slice(-2)).join('');
+    
+    // Convert to base64url format (RFC 4648 §5)
+    // This ensures we use only unreserved characters: A-Z, a-z, 0-9, -, ., _, ~
+    const base64 = btoa(String.fromCharCode(...array));
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**
@@ -97,12 +103,25 @@ function extractAuthCode(redirectUrl) {
  */
 async function exchangeCodeForTokens(authCode, codeVerifier) {
     const redirectUri = getRedirectUri();
+    
+    console.log('[Spotify Auth] Exchange tokens - code verifier length:', codeVerifier.length);
+    console.log('[Spotify Auth] Exchange tokens - redirect URI:', redirectUri);
+    
     const body = new URLSearchParams({
         client_id: SPOTIFY_CONFIG.clientId,
         grant_type: 'authorization_code',
         code: authCode,
         redirect_uri: redirectUri,
         code_verifier: codeVerifier
+    });
+
+    console.log('[Spotify Auth] Token exchange request body length:', body.toString().length);
+    console.log('[Spotify Auth] Token exchange request (without sensitive data):', {
+        client_id: SPOTIFY_CONFIG.clientId,
+        grant_type: 'authorization_code',
+        code_length: authCode.length,
+        redirect_uri: redirectUri,
+        code_verifier_length: codeVerifier.length
     });
 
     const response = await fetch(SPOTIFY_CONFIG.tokenUrl, {
@@ -115,6 +134,11 @@ async function exchangeCodeForTokens(authCode, codeVerifier) {
 
     if (!response.ok) {
         const errorText = await response.text();
+        console.error('[Spotify Auth] Token exchange failed response:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorText: errorText
+        });
         throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
@@ -138,9 +162,25 @@ async function storeTokens(accessToken, refreshToken, expiresIn) {
             [STORAGE_KEYS.EXPIRES_AT]: expiresAt
         }, () => {
             if (chrome.runtime.lastError) {
+                console.error('[Spotify Auth] Error storing tokens:', chrome.runtime.lastError);
                 reject(new Error(chrome.runtime.lastError.message));
             } else {
-                resolve();
+                // Verify tokens were stored correctly
+                chrome.storage.local.get([
+                    STORAGE_KEYS.ACCESS_TOKEN,
+                    STORAGE_KEYS.REFRESH_TOKEN
+                ], (result) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('[Spotify Auth] Error verifying stored tokens:', chrome.runtime.lastError);
+                        reject(new Error('Failed to verify token storage: ' + chrome.runtime.lastError.message));
+                    } else if (!result[STORAGE_KEYS.ACCESS_TOKEN] || !result[STORAGE_KEYS.REFRESH_TOKEN]) {
+                        console.error('[Spotify Auth] Tokens not found after storage:', result);
+                        reject(new Error('Tokens were not stored correctly'));
+                    } else {
+                        console.log('[Spotify Auth] Tokens stored and verified successfully');
+                        resolve();
+                    }
+                });
             }
         });
     });
@@ -320,7 +360,12 @@ async function authenticate() {
 
     // Generate PKCE parameters
     const codeVerifier = generateCodeVerifier();
+    console.log('[Spotify Auth] Code verifier generated, length:', codeVerifier.length);
+    console.log('[Spotify Auth] Code verifier format check (should be 43-128 chars):', 
+        codeVerifier.length >= 43 && codeVerifier.length <= 128 ? 'VALID' : 'INVALID');
+    
     const codeChallenge = await generateCodeChallenge(codeVerifier);
+    console.log('[Spotify Auth] Code challenge generated, length:', codeChallenge.length);
 
     // Build authorization URL
     const authUrl = buildAuthUrl(codeChallenge);
@@ -399,10 +444,23 @@ async function authenticate() {
                     }
 
                     console.log('[Spotify Auth] Authorization code received, exchanging for tokens...');
+                    console.log('[Spotify Auth] Auth code length:', authCode ? authCode.length : 0);
+                    console.log('[Spotify Auth] Code verifier available:', !!codeVerifier);
+                    console.log('[Spotify Auth] Code verifier length:', codeVerifier ? codeVerifier.length : 0);
+                    console.log('[Spotify Auth] Code verifier format (first 20 chars):', codeVerifier ? codeVerifier.substring(0, 20) : 'N/A');
 
                     try {
                         // Exchange code for tokens using the code verifier from closure
                         const tokenData = await exchangeCodeForTokens(authCode, codeVerifier);
+                        
+                        console.log('[Spotify Auth] Token exchange response received');
+                        console.log('[Spotify Auth] Has access_token:', !!tokenData.access_token);
+                        console.log('[Spotify Auth] Has refresh_token:', !!tokenData.refresh_token);
+                        console.log('[Spotify Auth] Expires in:', tokenData.expires_in);
+                        
+                        if (!tokenData.access_token || !tokenData.refresh_token) {
+                            throw new Error('Token response missing required fields: ' + JSON.stringify(Object.keys(tokenData)));
+                        }
                         
                         console.log('[Spotify Auth] Tokens received, storing...');
                         
@@ -413,11 +471,23 @@ async function authenticate() {
                             tokenData.expires_in
                         );
 
-                        console.log('[Spotify Auth] Authentication successful!');
+                        console.log('[Spotify Auth] Tokens stored successfully');
+                        
+                        // Verify tokens were stored
+                        const verifyAuth = await isAuthenticated();
+                        console.log('[Spotify Auth] Post-storage authentication check:', verifyAuth);
+                        
+                        if (!verifyAuth) {
+                            throw new Error('Tokens were stored but authentication verification failed');
+                        }
+
+                        console.log('[Spotify Auth] Authentication successful and verified!');
                         resolve();
                     } catch (error) {
                         console.error('[Spotify Auth] Token exchange failed:', error);
                         console.error('[Spotify Auth] Token exchange error stack:', error.stack);
+                        console.error('[Spotify Auth] Token exchange error name:', error.name);
+                        console.error('[Spotify Auth] Token exchange error message:', error.message);
                         reject(error);
                     }
                 }
