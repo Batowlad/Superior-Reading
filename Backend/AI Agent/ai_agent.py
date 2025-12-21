@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import re
 import os
+import sys
 from typing import Optional, TypedDict, List, Dict, Any
 from dotenv import load_dotenv
 
@@ -461,7 +462,7 @@ def run_music_agent(content: Optional[str] = None) -> Dict[str, Any]:
     for node_outputs in music_agent_graph.stream(initial_state):
         # Update final_state with outputs from each node
         for node_name, node_state in node_outputs.items():
-            print(f"Node '{node_name}' completed")
+            print(f"Node '{node_name}' completed", file=sys.stderr)
             final_state.update(node_state)
     
     return final_state
