@@ -539,30 +539,39 @@ document.addEventListener('DOMContentLoaded', function() {
             recommendationsCount: recommendations.length
         });
         
-        // Ensure player is ready before playing
-        const playerReady = await ensurePlayerReady();
-        
-        if (!playerReady || !isPlayerReady || !deviceId || !accessToken) {
-            console.log('[Popup] Player not ready, storing recommendations for later');
-            console.log('[Popup] Player state:', {
-                isPlayerReady,
-                deviceId,
-                hasAccessToken: !!accessToken,
-                isAuthenticated,
-                playerReady
-            });
+        // Check current state first
+        if (!isPlayerReady || !deviceId || !accessToken) {
+            console.log('[Popup] Player not ready, attempting to ensure it is ready...');
             
-            pendingRecommendations = recommendations;
+            // Try to ensure player is ready
+            const playerReady = await ensurePlayerReady();
             
-            // Update status to inform user
-            if (!isAuthenticated) {
-                updatePlayerStatus('Please connect to Spotify first', 'error');
-            } else if (!isPlayerReady) {
-                updatePlayerStatus('Initializing player...', 'default');
+            // Double-check after ensurePlayerReady
+            if (!playerReady || !isPlayerReady || !deviceId || !accessToken) {
+                console.log('[Popup] Player still not ready after ensurePlayerReady, storing recommendations for later');
+                console.log('[Popup] Player state:', {
+                    isPlayerReady,
+                    deviceId,
+                    hasAccessToken: !!accessToken,
+                    isAuthenticated,
+                    playerReady
+                });
+                
+                pendingRecommendations = recommendations;
+                
+                // Update status to inform user
+                if (!isAuthenticated) {
+                    updatePlayerStatus('Please connect to Spotify first', 'error');
+                } else if (!isPlayerReady) {
+                    updatePlayerStatus('Initializing player...', 'default');
+                }
+                
+                return;
             }
-            
-            return;
         }
+        
+        // Player is ready, proceed with playback
+        console.log('[Popup] Player is ready, proceeding with playback');
 
         // Extract Spotify track IDs from recommendations
         const trackUris = recommendations
@@ -722,11 +731,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     /**
      * Ensure player is ready before playing recommendations
-     * If not ready, initialize it
+     * If not ready, initialize it and wait for it to become ready
      */
     async function ensurePlayerReady() {
+        // If already ready, return immediately
         if (isPlayerReady && deviceId && accessToken) {
-            console.log('[Popup] Player is ready');
+            console.log('[Popup] Player is already ready');
             return true;
         }
         
@@ -749,14 +759,72 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // If authenticated but player not ready, initialize it
+        // If authenticated but player not ready, initialize it and wait
         if (isAuthenticated && accessToken && !isPlayerReady) {
-            console.log('[Popup] Initializing player...');
+            console.log('[Popup] Initializing player and waiting for ready state...');
             try {
                 await initializePlayer();
-                // Player will become ready asynchronously via PLAYER_READY message
-                // Return true to indicate initialization started
-                return true;
+                
+                // Wait for player to become ready (with timeout)
+                return new Promise((resolve) => {
+                    // Check immediately in case player is already ready
+                    if (isPlayerReady && deviceId) {
+                        console.log('[Popup] Player already ready after initialization');
+                        resolve(true);
+                        return;
+                    }
+                    
+                    const timeout = setTimeout(() => {
+                        console.warn('[Popup] Player initialization timeout after 10 seconds');
+                        console.warn('[Popup] Current state:', {
+                            isPlayerReady,
+                            deviceId,
+                            hasAccessToken: !!accessToken
+                        });
+                        window.removeEventListener('message', readyHandler);
+                        resolve(false);
+                    }, 10000); // 10 second timeout
+                    
+                    // Create a one-time listener for player ready
+                    const readyHandler = (event) => {
+                        // Only process messages from our sandbox
+                        if (event.source !== sandboxFrame.contentWindow) {
+                            return;
+                        }
+                        
+                        const message = event.data;
+                        if (message && (message.type === SANDBOX_MESSAGE_TYPES.DEVICE_ID || 
+                                       message.type === SANDBOX_MESSAGE_TYPES.PLAYER_READY)) {
+                            console.log('[Popup] Player became ready while waiting');
+                            clearTimeout(timeout);
+                            window.removeEventListener('message', readyHandler);
+                            resolve(true);
+                        } else if (message && message.type === SANDBOX_MESSAGE_TYPES.PLAYER_ERROR) {
+                            console.error('[Popup] Player error during initialization:', message.error);
+                            clearTimeout(timeout);
+                            window.removeEventListener('message', readyHandler);
+                            resolve(false);
+                        }
+                    };
+                    
+                    window.addEventListener('message', readyHandler);
+                    
+                    // Also periodically check if player became ready (in case message was missed)
+                    const checkInterval = setInterval(() => {
+                        if (isPlayerReady && deviceId) {
+                            console.log('[Popup] Player ready detected via polling');
+                            clearTimeout(timeout);
+                            clearInterval(checkInterval);
+                            window.removeEventListener('message', readyHandler);
+                            resolve(true);
+                        }
+                    }, 100); // Check every 100ms
+                    
+                    // Clear interval when timeout fires
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                    }, 10000);
+                });
             } catch (error) {
                 console.error('[Popup] Failed to initialize player:', error);
                 return false;
