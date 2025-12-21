@@ -462,6 +462,12 @@ document.addEventListener('DOMContentLoaded', function() {
         switch (message.type) {
             case SANDBOX_MESSAGE_TYPES.DEVICE_ID:
             case SANDBOX_MESSAGE_TYPES.PLAYER_READY:
+                console.log('[Popup] Player ready message received', {
+                    device_id: message.device_id,
+                    hasPendingRecommendations: !!pendingRecommendations,
+                    pendingCount: pendingRecommendations ? pendingRecommendations.length : 0
+                });
+                
                 deviceId = message.device_id;
                 isPlayerReady = true;
                 updatePlayerStatus('Ready', 'ready');
@@ -474,8 +480,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // If we have pending recommendations, play them
                 if (pendingRecommendations) {
-                    playRecommendations(pendingRecommendations);
-                    pendingRecommendations = null;
+                    console.log('[Popup] Playing pending recommendations now that player is ready');
+                    const recsToPlay = pendingRecommendations;
+                    pendingRecommendations = null; // Clear before playing to avoid re-triggering
+                    playRecommendations(recsToPlay);
                 }
                 break;
 
@@ -524,9 +532,35 @@ document.addEventListener('DOMContentLoaded', function() {
      * Play recommendations using Spotify Web API
      */
     async function playRecommendations(recommendations) {
-        if (!isPlayerReady || !deviceId || !accessToken) {
-            console.log('Player not ready, storing recommendations for later');
+        console.log('[Popup] playRecommendations called', {
+            isPlayerReady,
+            hasDeviceId: !!deviceId,
+            hasAccessToken: !!accessToken,
+            recommendationsCount: recommendations.length
+        });
+        
+        // Ensure player is ready before playing
+        const playerReady = await ensurePlayerReady();
+        
+        if (!playerReady || !isPlayerReady || !deviceId || !accessToken) {
+            console.log('[Popup] Player not ready, storing recommendations for later');
+            console.log('[Popup] Player state:', {
+                isPlayerReady,
+                deviceId,
+                hasAccessToken: !!accessToken,
+                isAuthenticated,
+                playerReady
+            });
+            
             pendingRecommendations = recommendations;
+            
+            // Update status to inform user
+            if (!isAuthenticated) {
+                updatePlayerStatus('Please connect to Spotify first', 'error');
+            } else if (!isPlayerReady) {
+                updatePlayerStatus('Initializing player...', 'default');
+            }
+            
             return;
         }
 
@@ -626,31 +660,46 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function checkPendingRecommendations() {
         try {
+            console.log('[Popup] Checking for pending recommendations from storage...');
             const result = await chrome.storage.local.get(['pendingRecommendations', 'recommendationsTimestamp']);
             
             if (result.pendingRecommendations && result.recommendationsTimestamp) {
                 // Only use recommendations if they're recent (within last 5 minutes)
                 const age = Date.now() - result.recommendationsTimestamp;
+                console.log('[Popup] Found pending recommendations, age:', age, 'ms');
+                
                 if (age < 5 * 60 * 1000) {
                     const recommendations = result.pendingRecommendations;
+                    console.log('[Popup] Recommendations are recent, attempting to play', {
+                        count: recommendations.length,
+                        isAuthenticated,
+                        isPlayerReady
+                    });
                     
                     // Clear the stored recommendations
                     await chrome.storage.local.remove(['pendingRecommendations', 'recommendationsTimestamp']);
                     
                     // Play the recommendations
                     if (!isAuthenticated) {
+                        console.log('[Popup] Not authenticated, initializing auth...');
                         await initializePlayerAuth();
                     }
                     
                     if (isAuthenticated) {
+                        console.log('[Popup] Authenticated, playing recommendations');
                         playRecommendations(recommendations);
                     } else {
+                        console.log('[Popup] Not authenticated after init, storing recommendations');
                         pendingRecommendations = recommendations;
                     }
+                } else {
+                    console.log('[Popup] Recommendations are too old, ignoring');
                 }
+            } else {
+                console.log('[Popup] No pending recommendations found in storage');
             }
         } catch (error) {
-            console.error('Error checking pending recommendations:', error);
+            console.error('[Popup] Error checking pending recommendations:', error);
         }
     }
     
@@ -659,6 +708,7 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName === 'local' && changes.pendingRecommendations) {
+            console.log('[Popup] Pending recommendations detected in storage change');
             checkPendingRecommendations();
         }
         
@@ -669,6 +719,52 @@ document.addEventListener('DOMContentLoaded', function() {
             initializePlayerAuth();
         }
     });
+    
+    /**
+     * Ensure player is ready before playing recommendations
+     * If not ready, initialize it
+     */
+    async function ensurePlayerReady() {
+        if (isPlayerReady && deviceId && accessToken) {
+            console.log('[Popup] Player is ready');
+            return true;
+        }
+        
+        console.log('[Popup] Player not ready, checking authentication...');
+        
+        // Check if authenticated
+        if (!isAuthenticated) {
+            const authenticated = await window.SpotifyAuth.isAuthenticated();
+            if (authenticated) {
+                try {
+                    await loadPlayerAccessToken();
+                    isAuthenticated = true;
+                } catch (error) {
+                    console.error('[Popup] Failed to load access token:', error);
+                    return false;
+                }
+            } else {
+                console.log('[Popup] Not authenticated, cannot initialize player');
+                return false;
+            }
+        }
+        
+        // If authenticated but player not ready, initialize it
+        if (isAuthenticated && accessToken && !isPlayerReady) {
+            console.log('[Popup] Initializing player...');
+            try {
+                await initializePlayer();
+                // Player will become ready asynchronously via PLAYER_READY message
+                // Return true to indicate initialization started
+                return true;
+            } catch (error) {
+                console.error('[Popup] Failed to initialize player:', error);
+                return false;
+            }
+        }
+        
+        return isPlayerReady && deviceId && accessToken;
+    }
     
     // Diagnostic function to check setup
     function checkSetup() {
