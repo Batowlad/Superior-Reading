@@ -423,6 +423,50 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     /**
+     * Get available Spotify devices using Web API
+     * This can be used as a fallback if the player ready event doesn't fire
+     */
+    async function getSpotifyDevices() {
+        try {
+            const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to get devices: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('[Popup] Available Spotify devices:', data.devices);
+            
+            // Find the device with our player name
+            const ourDevice = data.devices.find(device => 
+                device.name === 'Superior Reading Extension' || 
+                device.name.includes('Superior Reading')
+            );
+            
+            if (ourDevice) {
+                console.log('[Popup] Found our device:', ourDevice);
+                return ourDevice.id;
+            }
+            
+            // If no device found, return the first active device
+            const activeDevice = data.devices.find(device => device.is_active);
+            if (activeDevice) {
+                console.log('[Popup] Using active device:', activeDevice);
+                return activeDevice.id;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('[Popup] Error getting Spotify devices:', error);
+            return null;
+        }
+    }
+    
+    /**
      * Initialize Spotify player via sandbox
      */
     async function initializePlayer() {
@@ -431,22 +475,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         updatePlayerStatus('Initializing...', 'default');
+        console.log('[Popup] Initializing player, checking iframe...');
         
-        // Send access token to sandbox to initialize player
-        if (sandboxFrame.contentWindow) {
-            sandboxFrame.contentWindow.postMessage({
-                type: 'init_player',
-                access_token: accessToken
-            }, '*');
-        } else {
-            // Wait for iframe to load
-            sandboxFrame.onload = () => {
-                sandboxFrame.contentWindow.postMessage({
-                    type: 'init_player',
-                    access_token: accessToken
-                }, '*');
+        // Ensure iframe is loaded
+        return new Promise((resolve, reject) => {
+            const sendInitMessage = () => {
+                try {
+                    if (!sandboxFrame.contentWindow) {
+                        throw new Error('Sandbox iframe contentWindow not available');
+                    }
+                    
+                    console.log('[Popup] Sending init_player message to sandbox');
+                    sandboxFrame.contentWindow.postMessage({
+                        type: 'init_player',
+                        access_token: accessToken
+                    }, '*');
+                    
+                    // Give it a moment to process
+                    setTimeout(() => {
+                        resolve();
+                    }, 100);
+                } catch (error) {
+                    console.error('[Popup] Error sending init message:', error);
+                    reject(error);
+                }
             };
-        }
+            
+            // Check if iframe is already loaded
+            if (sandboxFrame.contentWindow) {
+                console.log('[Popup] Iframe already loaded');
+                sendInitMessage();
+            } else {
+                console.log('[Popup] Waiting for iframe to load...');
+                // Wait for iframe to load
+                const onLoad = () => {
+                    console.log('[Popup] Iframe loaded');
+                    sandboxFrame.removeEventListener('load', onLoad);
+                    sendInitMessage();
+                };
+                
+                sandboxFrame.addEventListener('load', onLoad);
+                
+                // Timeout if iframe doesn't load
+                setTimeout(() => {
+                    if (!sandboxFrame.contentWindow) {
+                        sandboxFrame.removeEventListener('load', onLoad);
+                        reject(new Error('Sandbox iframe failed to load within 5 seconds'));
+                    }
+                }, 5000);
+            }
+        });
     }
     
     /**
@@ -455,10 +533,20 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('message', (event) => {
         const message = event.data;
         
+        // Only process messages that look like they're from our sandbox
+        // (have our message types)
         if (!message || !message.type) {
             return;
         }
-
+        
+        // Check if it's one of our sandbox message types
+        const isSandboxMessage = Object.values(SANDBOX_MESSAGE_TYPES).includes(message.type);
+        if (!isSandboxMessage) {
+            return;
+        }
+        
+        console.log('[Popup] Message received from sandbox:', message.type, message);
+        
         switch (message.type) {
             case SANDBOX_MESSAGE_TYPES.DEVICE_ID:
             case SANDBOX_MESSAGE_TYPES.PLAYER_READY:
@@ -765,8 +853,8 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 await initializePlayer();
                 
-                // Wait for player to become ready (with timeout)
-                return new Promise((resolve) => {
+                // Wait for player to become ready (with timeout and fallback)
+                return new Promise(async (resolve) => {
                     // Check immediately in case player is already ready
                     if (isPlayerReady && deviceId) {
                         console.log('[Popup] Player already ready after initialization');
@@ -774,7 +862,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                     
-                    const timeout = setTimeout(() => {
+                    const timeout = setTimeout(async () => {
                         console.warn('[Popup] Player initialization timeout after 10 seconds');
                         console.warn('[Popup] Current state:', {
                             isPlayerReady,
@@ -782,24 +870,47 @@ document.addEventListener('DOMContentLoaded', function() {
                             hasAccessToken: !!accessToken
                         });
                         window.removeEventListener('message', readyHandler);
-                        resolve(false);
+                        
+                        // Try fallback: get device ID from Web API
+                        console.log('[Popup] Attempting fallback: getting device ID from Web API...');
+                        const fallbackDeviceId = await getSpotifyDevices();
+                        if (fallbackDeviceId) {
+                            console.log('[Popup] Got device ID from Web API:', fallbackDeviceId);
+                            deviceId = fallbackDeviceId;
+                            isPlayerReady = true;
+                            updatePlayerStatus('Ready', 'ready');
+                            showPlayerControls();
+                            playPauseBtn.disabled = false;
+                            nextBtn.disabled = false;
+                            prevBtn.disabled = false;
+                            resolve(true);
+                        } else {
+                            console.warn('[Popup] Fallback also failed - no device ID available');
+                            resolve(false);
+                        }
                     }, 10000); // 10 second timeout
                     
                     // Create a one-time listener for player ready
                     const readyHandler = (event) => {
-                        // Only process messages from our sandbox
-                        if (event.source !== sandboxFrame.contentWindow) {
+                        const message = event.data;
+                        
+                        // Only process our sandbox message types
+                        if (!message || !message.type) {
                             return;
                         }
                         
-                        const message = event.data;
-                        if (message && (message.type === SANDBOX_MESSAGE_TYPES.DEVICE_ID || 
-                                       message.type === SANDBOX_MESSAGE_TYPES.PLAYER_READY)) {
+                        const isSandboxMessage = Object.values(SANDBOX_MESSAGE_TYPES).includes(message.type);
+                        if (!isSandboxMessage) {
+                            return;
+                        }
+                        
+                        if (message.type === SANDBOX_MESSAGE_TYPES.DEVICE_ID || 
+                            message.type === SANDBOX_MESSAGE_TYPES.PLAYER_READY) {
                             console.log('[Popup] Player became ready while waiting');
                             clearTimeout(timeout);
                             window.removeEventListener('message', readyHandler);
                             resolve(true);
-                        } else if (message && message.type === SANDBOX_MESSAGE_TYPES.PLAYER_ERROR) {
+                        } else if (message.type === SANDBOX_MESSAGE_TYPES.PLAYER_ERROR) {
                             console.error('[Popup] Player error during initialization:', message.error);
                             clearTimeout(timeout);
                             window.removeEventListener('message', readyHandler);
@@ -857,6 +968,31 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         checkSetup();
     }, 100);
+    
+    /**
+     * Diagnostic function to check player state
+     */
+    function diagnosePlayerState() {
+        console.log('[Popup] === Player State Diagnostics ===');
+        console.log('[Popup] isAuthenticated:', isAuthenticated);
+        console.log('[Popup] isPlayerReady:', isPlayerReady);
+        console.log('[Popup] deviceId:', deviceId);
+        console.log('[Popup] hasAccessToken:', !!accessToken);
+        console.log('[Popup] sandboxFrame exists:', !!sandboxFrame);
+        console.log('[Popup] sandboxFrame.contentWindow:', !!sandboxFrame?.contentWindow);
+        console.log('[Popup] sandboxFrame.src:', sandboxFrame?.src);
+        
+        // Check storage for tokens
+        chrome.storage.local.get(['spotify_access_token', 'spotify_refresh_token'], (result) => {
+            console.log('[Popup] Storage - has access token:', !!result.spotify_access_token);
+            console.log('[Popup] Storage - has refresh token:', !!result.spotify_refresh_token);
+        });
+        
+        console.log('[Popup] =================================');
+    }
+    
+    // Make diagnosePlayerState available globally for debugging
+    window.diagnosePlayerState = diagnosePlayerState;
     
     // Initialize player on popup open
     initializePlayerAuth();
