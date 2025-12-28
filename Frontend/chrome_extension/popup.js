@@ -1,6 +1,5 @@
 // Popup script for Chrome extension - Minimalistic version
 document.addEventListener('DOMContentLoaded', function() {
-    const scrapeBtn = document.getElementById('scrapeBtn');
     const testBtn = document.getElementById('testBtn');
     const autoToggle = document.getElementById('autoToggle');
     const testModeToggle = document.getElementById('testModeToggle');
@@ -175,51 +174,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Manual scrape function
-    async function manualScrape() {
-        updateStatus('SCRAPING PAGE...', 'processing');
-        scrapeBtn.disabled = true;
-        scrapeBtn.textContent = 'PROCESSING...';
-        
-        try {
-            const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-            if (!tabs[0]) {
-                updateStatus('NO ACTIVE TAB', 'error');
-                scrapeBtn.disabled = false;
-                scrapeBtn.textContent = 'Scrape Current Page';
-                return;
-            }
-
-            // Wrap chrome.tabs.sendMessage in a Promise to properly await it
-            const response = await new Promise((resolve, reject) => {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'scrape'}, (response) => {
-                    // Check for Chrome runtime errors
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                        return;
-                    }
-                    resolve(response);
-                });
-            });
-
-            // Handle response from content script
-            if (response && response.success) {
-                updateStatus('SCRAPING COMPLETE!', 'success');
-            } else {
-                const errorMsg = response?.error || 'Unknown error';
-                console.error('Scraping failed:', errorMsg);
-                updateStatus('SCRAPING FAILED', 'error');
-            }
-        } catch (error) {
-            console.error('Error during scraping:', error);
-            updateStatus('SCRAPING FAILED', 'error');
-        } finally {
-            // Always reset button state, regardless of success or failure
-            scrapeBtn.disabled = false;
-            scrapeBtn.textContent = 'Scrape Current Page';
-        }
-    }
-
     // Toggle auto-scrape
     function toggleAutoScrape() {
         autoToggle.classList.toggle('active');
@@ -351,14 +305,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Event listeners
-    scrapeBtn.addEventListener('click', manualScrape);
     testBtn.addEventListener('click', testConnection);
     autoToggle.addEventListener('click', toggleAutoScrape);
     testModeToggle.addEventListener('click', toggleTestMode);
     playRecommendationsBtn.addEventListener('click', playRecommendationsFromBackend);
 
     // Initial status
-    updateStatus('READY TO SCRAPE', 'info');
+    updateStatus('READY', 'info');
 
     // Test connection on popup open
     testConnection();
