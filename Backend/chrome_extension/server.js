@@ -338,6 +338,27 @@ async function findLatestScrapedFile() {
 // Get latest recommendations endpoint
 app.get('/api/recommendations/latest', async (req, res) => {
     try {
+        // Check if preset/test mode is requested
+        if (req.query.preset === 'true' || req.query.test === 'true') {
+            const presetFile = path.join(__dirname, 'preset_recommendations.json');
+            
+            if (await fs.pathExists(presetFile)) {
+                const presetData = await fs.readJson(presetFile);
+                console.log('✅ Serving preset recommendations (test mode)');
+                return res.json({
+                    success: true,
+                    ...presetData,
+                    sourceFile: 'preset_recommendations.json',
+                    isPreset: true
+                });
+            } else {
+                return res.status(404).json({
+                    error: 'Preset recommendations file not found',
+                    message: 'The preset_recommendations.json file does not exist'
+                });
+            }
+        }
+        
         // Find the latest scraped file
         const latestFile = await findLatestScrapedFile();
         
@@ -539,6 +560,7 @@ app.listen(PORT, () => {
     console.log('   DELETE /api/content/:filename - Delete specific file');
     console.log('   POST /api/cleanup - Manual cleanup trigger');
     console.log('   GET  /api/recommendations/latest - Get latest music recommendations');
+    console.log('   GET  /api/recommendations/latest?preset=true - Get preset recommendations (test mode, no OpenAI tokens)');
     console.log('');
     console.log('🧹 Automatic cleanup:');
     console.log(`   - Enabled: ${CLEANUP_CONFIG.enabled}`);

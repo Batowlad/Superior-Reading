@@ -27,10 +27,15 @@ Superior Reading/
 │       └── icons/
 │           └── book_icon.png      # Extension icons
 ├── Backend/
-│   └── chrome_extension/
-│       ├── package.json           # Node.js dependencies
-│       ├── server.js              # Express server
-│       └── scraped_data/          # Directory for saved content (auto-created)
+│   ├── chrome_extension/
+│   │   ├── package.json           # Node.js dependencies
+│   │   ├── server.js              # Express server
+│   │   ├── preset_recommendations.json  # Preset music recommendations for testing
+│   │   └── scraped_data/          # Directory for saved content (auto-created)
+│   └── AI Agent/
+│       ├── ai_agent.py            # AI agent for content analysis
+│       ├── run_agent_cli.py       # CLI interface for AI agent
+│       └── requirements.txt       # Python dependencies
 └── README.md
 ```
 
@@ -146,6 +151,7 @@ The backend server provides several endpoints:
 - `GET /api/content/:filename` - Get specific content
 - `DELETE /api/content/:filename` - Delete specific file
 - `GET /api/recommendations/latest` - Get music recommendations for latest scraped content
+- `GET /api/recommendations/latest?preset=true` - Get preset recommendations (test mode, no OpenAI tokens)
 
 ## Configuration
 
@@ -293,6 +299,36 @@ The extension requests the following scopes (configured automatically):
    - Once recommendations are generated and you're connected to Spotify
    - The recommended tracks will start playing automatically
    - Use the player controls (play/pause, next, previous) to control playback
+
+#### Test Mode (Preset Recommendations)
+
+To test the extension without using OpenAI tokens, you can use preset recommendations:
+
+1. **Enable Test Mode:**
+   - Open the extension popup
+   - In the settings section, toggle "Test Mode (Preset)" to ON
+   - This will use preset recommendations instead of AI-generated ones
+
+2. **Using Preset Recommendations:**
+   - With test mode enabled, click "Play Recommendations"
+   - The extension will fetch preset recommendations from `Backend/chrome_extension/preset_recommendations.json`
+   - These include 5 classic tracks with valid Spotify IDs:
+     - Bohemian Rhapsody - Queen
+     - Stairway to Heaven - Led Zeppelin
+     - Hotel California - Eagles
+     - Comfortably Numb - Pink Floyd
+     - The Sound of Silence - Simon & Garfunkel
+
+3. **Customizing Preset Recommendations:**
+   - Edit `Backend/chrome_extension/preset_recommendations.json`
+   - Add or modify tracks with valid Spotify IDs
+   - The file follows the same structure as AI-generated recommendations
+   - Ensure each track has a `spotify_id` field for playback to work
+
+**Note:** Test mode is useful for:
+- Testing the extension without consuming OpenAI API tokens
+- Verifying Spotify playback functionality
+- Development and debugging
 
 #### Troubleshooting Spotify Integration
 

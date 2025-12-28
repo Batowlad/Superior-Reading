@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const scrapeBtn = document.getElementById('scrapeBtn');
     const testBtn = document.getElementById('testBtn');
     const autoToggle = document.getElementById('autoToggle');
+    const testModeToggle = document.getElementById('testModeToggle');
     const status = document.getElementById('status');
     const serverStatus = document.getElementById('serverStatus');
     
@@ -233,14 +234,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
+    
+    // Toggle test mode (preset recommendations)
+    function toggleTestMode() {
+        testModeToggle.classList.toggle('active');
+        const isActive = testModeToggle.classList.contains('active');
+        
+        // Store preference
+        chrome.storage.sync.set({testMode: isActive}, () => {
+            if (isActive) {
+                updateStatus('TEST MODE ON (Preset)', 'info');
+            } else {
+                updateStatus('TEST MODE OFF (AI)', 'info');
+            }
+        });
+    }
+    
     // Load saved preferences
-    chrome.storage.sync.get(['autoScrape'], (result) => {
+    chrome.storage.sync.get(['autoScrape', 'testMode'], (result) => {
         if (result.autoScrape !== undefined) {
             if (result.autoScrape) {
                 autoToggle.classList.add('active');
             } else {
                 autoToggle.classList.remove('active');
+            }
+        }
+        if (result.testMode !== undefined) {
+            if (result.testMode) {
+                testModeToggle.classList.add('active');
+            } else {
+                testModeToggle.classList.remove('active');
             }
         }
     });
@@ -254,11 +277,18 @@ document.addEventListener('DOMContentLoaded', function() {
     async function playRecommendationsFromBackend() {
         playRecommendationsBtn.disabled = true;
         playRecommendationsBtn.textContent = 'LOADING...';
-        updateStatus('FETCHING RECOMMENDATIONS...', 'processing');
+        
+        // Check if test mode is enabled
+        const isTestMode = testModeToggle.classList.contains('active');
+        updateStatus(isTestMode ? 'FETCHING PRESET RECOMMENDATIONS...' : 'FETCHING RECOMMENDATIONS...', 'processing');
         
         try {
+            const url = isTestMode 
+                ? 'http://localhost:3000/api/recommendations/latest?preset=true'
+                : 'http://localhost:3000/api/recommendations/latest';
+            
             // Fetch recommendations from backend
-            const response = await fetch('http://localhost:3000/api/recommendations/latest');
+            const response = await fetch(url);
             
             if (!response.ok) {
                 if (response.status === 404) {
@@ -324,6 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
     scrapeBtn.addEventListener('click', manualScrape);
     testBtn.addEventListener('click', testConnection);
     autoToggle.addEventListener('click', toggleAutoScrape);
+    testModeToggle.addEventListener('click', toggleTestMode);
     playRecommendationsBtn.addEventListener('click', playRecommendationsFromBackend);
 
     // Initial status
@@ -575,11 +606,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 return ourDevice.id;
             }
             
-            // If no device found, return the first active device
-            const activeDevice = data.devices.find(device => device.is_active);
+            // Skip "Web Player" and find an active device that's not "Web Player"
+            const activeDevice = data.devices.find(device => 
+                device.is_active && device.name !== 'Web Player (Chrome)'
+            );
             if (activeDevice) {
-                console.log('[Popup] Using active device:', activeDevice);
+                console.log('[Popup] Using active device (excluding Web Player):', activeDevice);
                 return activeDevice.id;
+            }
+            
+            // Fallback: if we have at least 2 devices, use the second one (index 1)
+            // This will use the computer instead of "Web Player" (which is typically first)
+            if (data.devices && data.devices.length >= 2) {
+                const secondDevice = data.devices[1];
+                console.log('[Popup] Using second available device as fallback:', secondDevice);
+                return secondDevice.id;
+            }
+            
+            // Last resort: use first device if only one is available
+            if (data.devices && data.devices.length > 0) {
+                const firstDevice = data.devices[0];
+                console.log('[Popup] Using first available device as last resort:', firstDevice);
+                return firstDevice.id;
             }
             
             return null;
@@ -992,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     const timeout = setTimeout(async () => {
-                        console.warn('[Popup] Player initialization timeout after 10 seconds');
+                        console.warn('[Popup] Player initialization timeout after 20 seconds');
                         console.warn('[Popup] Current state:', {
                             isPlayerReady,
                             deviceId,
@@ -1021,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             console.warn('[Popup] Fallback also failed - no device ID available');
                             resolve(false);
                         }
-                    }, 10000); // 10 second timeout
+                    }, 20000); // 20 second timeout
                     
                     // Create a one-time listener for player ready
                     const readyHandler = (event) => {
@@ -1067,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Clear interval when timeout fires
                     setTimeout(() => {
                         clearInterval(checkInterval);
-                    }, 10000);
+                    }, 20000);
                 });
             } catch (error) {
                 console.error('[Popup] Failed to initialize player:', error);
