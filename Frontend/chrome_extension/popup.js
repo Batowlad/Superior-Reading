@@ -1,7 +1,6 @@
 // Popup script for Chrome extension - Minimalistic version
 document.addEventListener('DOMContentLoaded', function() {
     const testBtn = document.getElementById('testBtn');
-    const autoToggle = document.getElementById('autoToggle');
     const testModeToggle = document.getElementById('testModeToggle');
     const status = document.getElementById('status');
     const serverStatus = document.getElementById('serverStatus');
@@ -174,21 +173,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Toggle auto-scrape
-    function toggleAutoScrape() {
-        autoToggle.classList.toggle('active');
-        const isActive = autoToggle.classList.contains('active');
-        
-        // Store preference
-        chrome.storage.sync.set({autoScrape: isActive}, () => {
-            if (isActive) {
-                updateStatus('AUTO-SCRAPE ON', 'success');
-            } else {
-                updateStatus('AUTO-SCRAPE OFF', 'info');
-            }
-        });
-    }
-    
     // Toggle test mode (preset recommendations)
     function toggleTestMode() {
         testModeToggle.classList.toggle('active');
@@ -205,14 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Load saved preferences
-    chrome.storage.sync.get(['autoScrape', 'testMode'], (result) => {
-        if (result.autoScrape !== undefined) {
-            if (result.autoScrape) {
-                autoToggle.classList.add('active');
-            } else {
-                autoToggle.classList.remove('active');
-            }
-        }
+    chrome.storage.sync.get(['testMode'], (result) => {
         if (result.testMode !== undefined) {
             if (result.testMode) {
                 testModeToggle.classList.add('active');
@@ -306,7 +283,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Event listeners
     testBtn.addEventListener('click', testConnection);
-    autoToggle.addEventListener('click', toggleAutoScrape);
     testModeToggle.addEventListener('click', toggleTestMode);
     playRecommendationsBtn.addEventListener('click', playRecommendationsFromBackend);
 
