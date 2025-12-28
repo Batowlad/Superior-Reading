@@ -28,6 +28,100 @@ document.addEventListener('DOMContentLoaded', function() {
     let isPlaying = false;
     let pendingRecommendations = null;
     
+    // Storage keys for player state
+    const PLAYER_STORAGE_KEYS = {
+        DEVICE_ID: 'spotify_player_device_id',
+        PLAYER_READY: 'spotify_player_ready',
+        PLAYER_READY_TIMESTAMP: 'spotify_player_ready_timestamp'
+    };
+    
+    /**
+     * Save player state to storage
+     */
+    function savePlayerState() {
+        chrome.storage.local.set({
+            [PLAYER_STORAGE_KEYS.DEVICE_ID]: deviceId,
+            [PLAYER_STORAGE_KEYS.PLAYER_READY]: isPlayerReady,
+            [PLAYER_STORAGE_KEYS.PLAYER_READY_TIMESTAMP]: isPlayerReady ? Date.now() : null
+        }, () => {
+            if (chrome.runtime.lastError) {
+                console.error('[Popup] Error saving player state:', chrome.runtime.lastError);
+            } else {
+                console.log('[Popup] Player state saved:', { deviceId, isPlayerReady });
+            }
+        });
+    }
+    
+    /**
+     * Restore player state from storage
+     */
+    async function restorePlayerState() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get([
+                PLAYER_STORAGE_KEYS.DEVICE_ID,
+                PLAYER_STORAGE_KEYS.PLAYER_READY,
+                PLAYER_STORAGE_KEYS.PLAYER_READY_TIMESTAMP
+            ], (result) => {
+                if (chrome.runtime.lastError) {
+                    console.error('[Popup] Error restoring player state:', chrome.runtime.lastError);
+                    resolve(false);
+                    return;
+                }
+                
+                const storedDeviceId = result[PLAYER_STORAGE_KEYS.DEVICE_ID];
+                const storedReady = result[PLAYER_STORAGE_KEYS.PLAYER_READY];
+                const storedTimestamp = result[PLAYER_STORAGE_KEYS.PLAYER_READY_TIMESTAMP];
+                
+                // Only restore if state is recent (within last hour)
+                const isRecent = storedTimestamp && (Date.now() - storedTimestamp < 60 * 60 * 1000);
+                
+                if (storedDeviceId && storedReady && isRecent) {
+                    console.log('[Popup] Restoring player state from storage:', {
+                        deviceId: storedDeviceId,
+                        isPlayerReady: storedReady,
+                        age: storedTimestamp ? Math.round((Date.now() - storedTimestamp) / 1000) + 's' : 'unknown'
+                    });
+                    
+                    deviceId = storedDeviceId;
+                    isPlayerReady = storedReady;
+                    
+                    // Update UI to show player is ready
+                    updatePlayerStatus('Ready', 'ready');
+                    showPlayerControls();
+                    playPauseBtn.disabled = false;
+                    nextBtn.disabled = false;
+                    prevBtn.disabled = false;
+                    
+                    resolve(true);
+                } else {
+                    console.log('[Popup] No valid stored player state found or state expired');
+                    resolve(false);
+                }
+            });
+        });
+    }
+    
+    /**
+     * Clear player state from storage and reset local variables
+     */
+    function clearPlayerState() {
+        chrome.storage.local.remove([
+            PLAYER_STORAGE_KEYS.DEVICE_ID,
+            PLAYER_STORAGE_KEYS.PLAYER_READY,
+            PLAYER_STORAGE_KEYS.PLAYER_READY_TIMESTAMP
+        ], () => {
+            if (chrome.runtime.lastError) {
+                console.error('[Popup] Error clearing player state:', chrome.runtime.lastError);
+            } else {
+                console.log('[Popup] Player state cleared from storage');
+            }
+        });
+        
+        // Reset local state
+        deviceId = null;
+        isPlayerReady = false;
+    }
+    
     // Message types from sandbox
     const SANDBOX_MESSAGE_TYPES = {
         DEVICE_ID: 'device_id',
@@ -290,6 +384,23 @@ document.addEventListener('DOMContentLoaded', function() {
     async function initializePlayerAuth() {
         try {
             console.log('[Popup] Checking authentication status...');
+            
+            // First, try to restore player state from storage
+            const stateRestored = await restorePlayerState();
+            if (stateRestored && deviceId && isPlayerReady) {
+                console.log('[Popup] Player state restored from storage, verifying with token...');
+                // Still need to load token for API calls
+                try {
+                    await loadPlayerAccessToken();
+                    // Re-initialize player to reconnect (but state is already restored)
+                    await initializePlayer();
+                    return; // State already restored, no need to continue
+                } catch (error) {
+                    console.warn('[Popup] Error loading token after state restore:', error);
+                    // Continue with normal flow
+                }
+            }
+            
             const authenticated = await window.SpotifyAuth.isAuthenticated();
             console.log('[Popup] Authentication status:', authenticated);
             
@@ -297,9 +408,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     await loadPlayerAccessToken();
                     console.log('[Popup] Token loaded successfully, isAuthenticated flag set to:', isAuthenticated);
-                    updatePlayerStatus('Initializing...', 'default');
-                    await initializePlayer();
-                    console.log('[Popup] Player initialization started');
+                    
+                    // Only initialize if player isn't already ready
+                    if (!isPlayerReady || !deviceId) {
+                        updatePlayerStatus('Initializing...', 'default');
+                        await initializePlayer();
+                        console.log('[Popup] Player initialization started');
+                    } else {
+                        console.log('[Popup] Player already ready, skipping initialization');
+                        updatePlayerStatus('Ready', 'ready');
+                        showPlayerControls();
+                    }
                     // Status will be updated when sandbox sends PLAYER_READY message
                     // Don't show auth UI since we're authenticated
                 } catch (error) {
@@ -315,6 +434,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         updatePlayerStatus('Please re-authenticate', 'error');
                         showAuthUI();
                         isAuthenticated = false;
+                        // Clear stored state
+                        clearPlayerState();
                     } else {
                         // For other errors, still show as connected but with error status
                         updatePlayerStatus('Connected (error initializing)', 'error');
@@ -325,6 +446,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 updatePlayerStatus('Not Connected', 'error');
                 showAuthUI();
                 isAuthenticated = false;
+                // Clear stored state
+                clearPlayerState();
             }
         } catch (error) {
             console.error('[Popup] Error checking authentication:', error);
@@ -558,6 +681,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 deviceId = message.device_id;
                 isPlayerReady = true;
+                
+                // Save state to storage
+                savePlayerState();
+                
                 updatePlayerStatus('Ready', 'ready');
                 showPlayerControls();
                 
@@ -609,6 +736,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 updatePlayerStatus('Not Connected', 'error');
                 showAuthUI();
                 isAuthenticated = false;
+                // Clear stored state
+                clearPlayerState();
                 break;
 
             default:
@@ -878,6 +1007,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             console.log('[Popup] Got device ID from Web API:', fallbackDeviceId);
                             deviceId = fallbackDeviceId;
                             isPlayerReady = true;
+                            
+                            // Save state to storage
+                            savePlayerState();
+                            
                             updatePlayerStatus('Ready', 'ready');
                             showPlayerControls();
                             playPauseBtn.disabled = false;
