@@ -1040,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     const timeout = setTimeout(async () => {
-                        console.warn('[Popup] Player initialization timeout after 20 seconds');
+                        console.warn('[Popup] Player initialization timeout after 5 seconds');
                         console.warn('[Popup] Current state:', {
                             isPlayerReady,
                             deviceId,
@@ -1115,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Clear interval when timeout fires
                     setTimeout(() => {
                         clearInterval(checkInterval);
-                    }, 20000);
+                    }, 5000);
                 });
             } catch (error) {
                 console.error('[Popup] Failed to initialize player:', error);
