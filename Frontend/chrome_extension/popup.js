@@ -2,6 +2,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const testBtn = document.getElementById('testBtn');
     const testModeToggle = document.getElementById('testModeToggle');
+    const autoFetchToggle = document.getElementById('autoFetchToggle');
     const status = document.getElementById('status');
     const serverStatus = document.getElementById('serverStatus');
     
@@ -189,13 +190,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Toggle auto-fetch recommendations
+    function toggleAutoFetch() {
+        autoFetchToggle.classList.toggle('active');
+        const isActive = autoFetchToggle.classList.contains('active');
+        
+        // Store preference
+        chrome.storage.sync.set({autoFetchRecommendations: isActive}, () => {
+            if (isActive) {
+                updateStatus('AUTO-FETCH ON', 'info');
+            } else {
+                updateStatus('AUTO-FETCH OFF', 'info');
+            }
+        });
+    }
+    
     // Load saved preferences
-    chrome.storage.sync.get(['testMode'], (result) => {
+    chrome.storage.sync.get(['testMode', 'autoFetchRecommendations'], (result) => {
         if (result.testMode !== undefined) {
             if (result.testMode) {
                 testModeToggle.classList.add('active');
             } else {
                 testModeToggle.classList.remove('active');
+            }
+        }
+        
+        if (result.autoFetchRecommendations !== undefined) {
+            if (result.autoFetchRecommendations) {
+                autoFetchToggle.classList.add('active');
+            } else {
+                autoFetchToggle.classList.remove('active');
             }
         }
     });
@@ -285,6 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Event listeners
     testBtn.addEventListener('click', testConnection);
     testModeToggle.addEventListener('click', toggleTestMode);
+    autoFetchToggle.addEventListener('click', toggleAutoFetch);
     playRecommendationsBtn.addEventListener('click', playRecommendationsFromBackend);
 
     // Initial status

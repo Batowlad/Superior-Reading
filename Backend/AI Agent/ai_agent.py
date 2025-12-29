@@ -67,7 +67,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 llm = None
 if OPENAI_API_KEY:
     llm = ChatOpenAI(
-        model="gpt-4o-mini", 
+        model="gpt-4o", 
         temperature=0.3, 
         api_key=OPENAI_API_KEY
     )
@@ -398,6 +398,7 @@ def music_selector_node(state: AgentState) -> Dict[str, Any]:
                     "album": track.get('album'),
                     "source": "spotify"
                 })
+
     
     return {
         "music_recommendations": {

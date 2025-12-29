@@ -25,6 +25,73 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         });
         sendResponse({success: true});
+    } else if (request.action === 'scrapingComplete') {
+        // Handle automatic fetching of recommendations after scraping
+        (async () => {
+            try {
+                console.log('[Background] Scraping complete, checking auto-fetch preference...');
+                
+                // Check if auto-fetch is enabled
+                const prefs = await chrome.storage.sync.get(['autoFetchRecommendations', 'testMode']);
+                
+                if (!prefs.autoFetchRecommendations) {
+                    console.log('[Background] Auto-fetch is disabled, skipping recommendation fetch');
+                    return;
+                }
+                
+                console.log('[Background] Auto-fetch is enabled, fetching recommendations...');
+                
+                // Determine URL based on test mode
+                const isTestMode = prefs.testMode === true;
+                const url = isTestMode 
+                    ? 'http://localhost:3000/api/recommendations/latest?preset=true'
+                    : 'http://localhost:3000/api/recommendations/latest';
+                
+                // Fetch recommendations from backend
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        console.log('[Background] No scraped content found for recommendations');
+                        return;
+                    }
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || `Server error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.music_recommendations || !data.music_recommendations.recommendations) {
+                    console.log('[Background] No recommendations found in response');
+                    return;
+                }
+                
+                const recommendations = data.music_recommendations.recommendations;
+                
+                // Filter to only recommendations with spotify_id
+                const spotifyRecommendations = recommendations.filter(rec => rec.spotify_id);
+                
+                if (spotifyRecommendations.length === 0) {
+                    console.log('[Background] No Spotify tracks found in recommendations');
+                    return;
+                }
+                
+                console.log(`[Background] Found ${spotifyRecommendations.length} Spotify track(s), storing for playback`);
+                
+                // Store recommendations in chrome.storage for the popup player to pick up
+                await chrome.storage.local.set({
+                    pendingRecommendations: spotifyRecommendations,
+                    recommendationsTimestamp: Date.now()
+                });
+                
+                console.log('[Background] Recommendations stored, popup will play them automatically');
+                
+            } catch (error) {
+                console.error('[Background] Error in auto-fetch recommendations:', error);
+            }
+        })();
+        // Don't wait for async operation
+        sendResponse({success: true});
     } else if (request.action === 'startPlayback') {
         // Handle playback request - store recommendations for popup to pick up
         (async () => {

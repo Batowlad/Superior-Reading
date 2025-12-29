@@ -248,6 +248,15 @@
         if (success) {
             console.log('🎉 Content successfully sent to backend server');
             createY2KNotification(`SCRAPED ${contentData.wordCount} WORDS`, 'success', 4000);
+            
+            // Notify background script that scraping is complete
+            chrome.runtime.sendMessage({
+                action: 'scrapingComplete',
+                success: true
+            }).catch(error => {
+                console.error('Error sending scrapingComplete message:', error);
+            });
+            
             return true;
         } else {
             console.error('💥 Failed to send content to backend server');
