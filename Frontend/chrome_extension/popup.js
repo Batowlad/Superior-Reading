@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentTrack = null;
     let isPlaying = false;
     let pendingRecommendations = null;
+    let authTimeoutId = null;
     
     // Storage keys for player state
     const PLAYER_STORAGE_KEYS = {
@@ -437,6 +438,76 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     /**
+     * Handle authentication status messages from background script
+     */
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'authStatus') {
+            console.log('[Popup] Authentication status update:', message.status, message.message);
+            
+            switch (message.status) {
+                case 'authenticating':
+                    updatePlayerStatus(message.message || 'Connecting...', 'default');
+                    break;
+                    
+                case 'success':
+                    // Authentication successful, continue with player initialization
+                    (async () => {
+                        try {
+                            clearTimeout(authTimeoutId);
+                            console.log('[Popup] Authentication successful, loading token...');
+                            
+                            // Verify authentication status after token storage
+                            const authCheck = await window.SpotifyAuth.isAuthenticated();
+                            console.log('[Popup] Authentication verification:', authCheck);
+                            if (!authCheck) {
+                                throw new Error('Authentication verification failed - tokens may not have been stored correctly');
+                            }
+                            
+                            await loadPlayerAccessToken();
+                            console.log('[Popup] Token loaded, initializing player...');
+                            
+                            // Update UI immediately after successful authentication
+                            updatePlayerStatus('Initializing player...', 'default');
+                            
+                            await initializePlayer();
+                            console.log('[Popup] Player initialized successfully');
+                            updatePlayerStatus('Connected', 'ready');
+                            
+                            // Note: Player controls will be shown when sandbox sends PLAYER_READY message
+                            // But we can hide the auth button since authentication is complete
+                            authButton.disabled = false;
+                            console.log('[Popup] ===== AUTHENTICATION COMPLETE =====');
+                        } catch (error) {
+                            console.error('[Popup] ===== POST-AUTHENTICATION ERROR =====');
+                            console.error('[Popup] Error after authentication success:', error);
+                            console.error('[Popup] Error stack:', error.stack);
+                            console.error('[Popup] Error name:', error.name);
+                            console.error('[Popup] Error message:', error.message);
+                            console.error('[Popup] ====================================');
+                            
+                            const errorMsg = error.message || 'Failed to initialize player';
+                            updatePlayerStatus(errorMsg.length > 40 ? errorMsg.substring(0, 40) + '...' : errorMsg, 'error');
+                            authButton.disabled = false;
+                        }
+                    })();
+                    break;
+                    
+                case 'error':
+                    // Authentication failed
+                    clearTimeout(authTimeoutId);
+                    console.error('[Popup] ===== AUTHENTICATION ERROR =====');
+                    console.error('[Popup] Authentication error from background:', message.message);
+                    console.error('[Popup] ================================');
+                    
+                    const errorMsg = message.message || 'Authentication failed';
+                    updatePlayerStatus(errorMsg.length > 40 ? errorMsg.substring(0, 40) + '...' : errorMsg, 'error');
+                    authButton.disabled = false;
+                    break;
+            }
+        }
+    });
+    
+    /**
      * Handle authentication button click
      */
     authButton.addEventListener('click', async () => {
@@ -446,57 +517,48 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePlayerStatus('Connecting...', 'default');
         
         // Add timeout to detect if authentication hangs
-        const timeoutId = setTimeout(() => {
+        authTimeoutId = setTimeout(() => {
             console.warn('[Popup] Authentication timeout - no response after 60 seconds');
             updatePlayerStatus('Authentication timeout - check console', 'error');
             authButton.disabled = false;
         }, 60000);
         
         try {
-            console.log('[Popup] Starting authentication...');
-            console.log('[Popup] SpotifyAuth object:', window.SpotifyAuth);
-            console.log('[Popup] authenticate function:', typeof window.SpotifyAuth?.authenticate);
+            console.log('[Popup] Sending authentication request to background script...');
             
-            if (!window.SpotifyAuth || typeof window.SpotifyAuth.authenticate !== 'function') {
-                throw new Error('SpotifyAuth not available. Please reload the extension.');
-            }
-            
-            const authPromise = window.SpotifyAuth.authenticate();
-            console.log('[Popup] Authentication promise created, waiting...');
-            
-            await authPromise;
-            clearTimeout(timeoutId);
-            console.log('[Popup] Authentication successful, loading token...');
-            
-            // Verify authentication status after token storage
-            const authCheck = await window.SpotifyAuth.isAuthenticated();
-            console.log('[Popup] Authentication verification:', authCheck);
-            if (!authCheck) {
-                throw new Error('Authentication verification failed - tokens may not have been stored correctly');
-            }
-            
-            await loadPlayerAccessToken();
-            console.log('[Popup] Token loaded, initializing player...');
-            
-            // Update UI immediately after successful authentication
-            updatePlayerStatus('Initializing player...', 'default');
-            
-            await initializePlayer();
-            console.log('[Popup] Player initialized successfully');
-            updatePlayerStatus('Connected', 'ready');
-            
-            // Note: Player controls will be shown when sandbox sends PLAYER_READY message
-            // But we can hide the auth button since authentication is complete
-            authButton.disabled = false;
-            console.log('[Popup] ===== AUTHENTICATION COMPLETE =====');
+            // Send authentication request to background script
+            chrome.runtime.sendMessage(
+                { action: 'authenticate' },
+                (response) => {
+                    // Handle immediate response (if any)
+                    if (chrome.runtime.lastError) {
+                        clearTimeout(authTimeoutId);
+                        console.error('[Popup] Error sending authentication request:', chrome.runtime.lastError);
+                        updatePlayerStatus('Failed to start authentication', 'error');
+                        authButton.disabled = false;
+                        return;
+                    }
+                    
+                    // The actual authentication status will come via onMessage listener
+                    // This response is just for the initial send confirmation
+                    if (response && response.success === false) {
+                        clearTimeout(authTimeoutId);
+                        console.error('[Popup] Authentication failed:', response.error);
+                        updatePlayerStatus(response.error || 'Authentication failed', 'error');
+                        authButton.disabled = false;
+                    } else {
+                        console.log('[Popup] Authentication request sent, waiting for status updates...');
+                        // Status updates will come via onMessage listener
+                    }
+                }
+            );
         } catch (error) {
-            clearTimeout(timeoutId);
+            clearTimeout(authTimeoutId);
             console.error('[Popup] ===== AUTHENTICATION ERROR =====');
-            console.error('[Popup] Authentication error caught:', error);
+            console.error('[Popup] Error sending authentication request:', error);
             console.error('[Popup] Error stack:', error.stack);
             console.error('[Popup] Error name:', error.name);
             console.error('[Popup] Error message:', error.message);
-            console.error('[Popup] Error toString:', error.toString());
             console.error('[Popup] ================================');
             
             const errorMsg = error.message || 'Authentication failed';
