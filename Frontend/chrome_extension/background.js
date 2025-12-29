@@ -1,4 +1,7 @@
 // Background service worker for Chrome extension
+// Import spotify_auth.js to use authentication functions
+importScripts('spotify_auth.js');
+
 chrome.runtime.onInstalled.addListener(() => {
     console.log('Superior Reading extension installed');
 });
@@ -36,6 +39,64 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({success: true});
             } catch (error) {
                 console.error('Error starting playback:', error);
+                sendResponse({success: false, error: error.message});
+            }
+        })();
+        return true; // Keep channel open for async response
+    } else if (request.action === 'authenticate') {
+        // Handle OAuth authentication request from popup
+        // This runs in the background service worker, which persists even when popup closes
+        (async () => {
+            try {
+                console.log('[Background] Authentication request received from popup');
+                
+                // Check if SpotifyAuth is available
+                if (!SpotifyAuth || typeof SpotifyAuth.authenticate !== 'function') {
+                    throw new Error('SpotifyAuth not available in background script');
+                }
+                
+                // Send initial status update
+                chrome.runtime.sendMessage({
+                    action: 'authStatus',
+                    status: 'authenticating',
+                    message: 'Starting authentication...'
+                }).catch(() => {
+                    // Ignore errors if popup is closed
+                });
+                
+                // Perform authentication in background context
+                await SpotifyAuth.authenticate();
+                
+                console.log('[Background] Authentication successful');
+                
+                // Verify authentication
+                const isAuth = await SpotifyAuth.isAuthenticated();
+                if (!isAuth) {
+                    throw new Error('Authentication verification failed');
+                }
+                
+                // Send success status
+                chrome.runtime.sendMessage({
+                    action: 'authStatus',
+                    status: 'success',
+                    message: 'Authentication successful'
+                }).catch(() => {
+                    // Ignore errors if popup is closed
+                });
+                
+                sendResponse({success: true});
+            } catch (error) {
+                console.error('[Background] Authentication error:', error);
+                
+                // Send error status
+                chrome.runtime.sendMessage({
+                    action: 'authStatus',
+                    status: 'error',
+                    message: error.message || 'Authentication failed'
+                }).catch(() => {
+                    // Ignore errors if popup is closed
+                });
+                
                 sendResponse({success: false, error: error.message});
             }
         })();

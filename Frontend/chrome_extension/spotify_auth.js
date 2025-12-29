@@ -514,7 +514,7 @@ if (typeof module !== 'undefined' && module.exports) {
     };
 } else {
     // Browser/Chrome extension environment
-    window.SpotifyAuth = {
+    const SpotifyAuth = {
         authenticate,
         getAccessToken,
         refreshAccessToken,
@@ -523,4 +523,19 @@ if (typeof module !== 'undefined' && module.exports) {
         getRedirectUri,
         SPOTIFY_CONFIG
     };
+    
+    // Set on window for popup context
+    if (typeof window !== 'undefined') {
+        window.SpotifyAuth = SpotifyAuth;
+    }
+    
+    // Set on global scope for service worker context
+    if (typeof self !== 'undefined') {
+        self.SpotifyAuth = SpotifyAuth;
+    }
+    
+    // Also set as global variable (works in both contexts)
+    if (typeof globalThis !== 'undefined') {
+        globalThis.SpotifyAuth = SpotifyAuth;
+    }
 }
