@@ -53,8 +53,6 @@ _latest_file: Optional[Path] = _find_latest_scraped_file(SCRAPED_DATA_DIR)
 page_content: str = _read_content_from_json(_latest_file) if _latest_file else ""
 
 
-
-
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from langchain_core.messages import SystemMessage, HumanMessage

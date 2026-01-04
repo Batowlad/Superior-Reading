@@ -1,6 +1,6 @@
 # Superior Reading - Chrome Extension
 
-A Chrome extension that automatically scrapes the main content from web pages and sends it to your local PC without any human interaction.
+A powerful Chrome extension that automatically scrapes main content from web pages, analyzes it with AI, and provides personalized Spotify music recommendations. The extension seamlessly extracts article content, sends it to your local backend server, and uses AI to generate music recommendations based on the content's theme and mood. With full Spotify Premium integration, you can instantly play recommended tracks directly from the extension's built-in player.
 
 ## Features
 
