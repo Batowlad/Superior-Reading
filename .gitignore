@@ -7,3 +7,4 @@ package-lock.json
 Frontend/.DS_Store
 .env
 .cache
+expressions.txt
