@@ -13,6 +13,17 @@ A powerful Chrome extension that automatically scrapes main content from web pag
 - 🎨 **Modern UI**: Clean and intuitive popup interface
 - 🎵 **Spotify Integration**: AI-powered music recommendations based on scraped content with Spotify Premium playback
 
+## Getting Started
+
+### Clone the Repository
+
+To get started with Superior Reading, clone the repository to your local machine:
+
+```bash
+git clone https://github.com/Batowlad/Superior-Reading.git
+cd Superior-Reading
+```
+
 ## Project Structure
 
 ```
@@ -38,6 +49,53 @@ Superior Reading/
 │       └── requirements.txt       # Python dependencies
 └── README.md
 ```
+
+## Prerequisites
+
+Before setting up the application, you'll need to obtain the following API keys and credentials:
+
+### Required API Keys
+
+#### OpenAI API Key
+
+- **Purpose**: Required for AI content analysis and music recommendations
+- **How to obtain**:
+  1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
+  2. Sign in or create an account
+  3. Navigate to API Keys section
+  4. Click "Create new secret key"
+  5. Copy the API key (you won't be able to see it again)
+- **Where to set**: 
+  - Set as an environment variable: `export OPENAI_API_KEY='your-key-here'`
+  - Or create a `.env` file in the `Backend/AI Agent/` directory with: `OPENAI_API_KEY=your-key-here`
+- **Usage**: Used by `ai_agent.py` for analyzing scraped content and generating music recommendations
+
+#### Spotify Client ID (OAuth)
+
+- **Purpose**: Required for Spotify Premium playback integration
+- **How to obtain**: See detailed instructions in the [Setting Up Spotify Developer App](#setting-up-spotify-developer-app) section below
+- **Where to set**: Update `Frontend/chrome_extension/spotify_auth.js` (line 7) with your Client ID
+- **Additional requirement**: You must have a Spotify Premium subscription to use the Web Playback SDK
+- **Usage**: OAuth authentication for Spotify Web Playback SDK
+
+### Optional API Keys
+
+#### Spotify Client ID and Client Secret (for AI Agent)
+
+- **Purpose**: Optional, enables enhanced Spotify track search in the AI agent
+- **How to obtain**: 
+  1. Create a Spotify app at [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) (same app used for OAuth)
+  2. After creating the app, you'll see both Client ID and Client Secret
+  3. Copy both values
+- **Where to set**: 
+  - Set as environment variables: 
+    - `export SPOTIFY_CLIENT_ID='your-client-id'`
+    - `export SPOTIFY_CLIENT_SECRET='your-client-secret'`
+  - Or add to `.env` file in `Backend/AI Agent/` directory:
+    - `SPOTIFY_CLIENT_ID=your-client-id`
+    - `SPOTIFY_CLIENT_SECRET=your-client-secret`
+- **Usage**: Used by `ai_agent.py` for direct Spotify API searches to find matching tracks
+- **Note**: If not set, AI recommendations will still work but without direct Spotify track matching. The extension will rely on AI-generated recommendations without searching Spotify's catalog.
 
 ## Setup Instructions
 
