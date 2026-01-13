@@ -216,7 +216,7 @@ function setupPlayerHandlers() {
     console.log('[Sandbox] Setting up event handlers for player...');
 
     // Ready event - player is ready and device_id is available
-    spotifyPlayer.addListener('ready', ({ device_id }) => {
+    spotifyPlayer.addListener('ready', async ({ device_id }) => {
         console.log('[Sandbox] ===== PLAYER READY EVENT FIRED =====');
         console.log('[Sandbox] Device ID received:', device_id);
         deviceId = device_id;
@@ -232,6 +232,30 @@ function setupPlayerHandlers() {
         });
         
         console.log('[Sandbox] Ready messages sent to parent');
+        
+        // Fetch and send current player state (in case a track is already playing)
+        try {
+            const state = await spotifyPlayer.getCurrentState();
+            if (state) {
+                console.log('[Sandbox] Sending initial player state to parent');
+                sendToParent(MESSAGE_TYPES.PLAYER_STATE, {
+                    state: {
+                        paused: state.paused,
+                        position: state.position,
+                        duration: state.duration,
+                        track: state.track_window?.current_track ? {
+                            id: state.track_window.current_track.id,
+                            name: state.track_window.current_track.name,
+                            artist: state.track_window.current_track.artists.map(a => a.name).join(', '),
+                            album: state.track_window.current_track.album.name,
+                            image: state.track_window.current_track.album.images[0]?.url
+                        } : null
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn('[Sandbox] Could not get initial player state:', error);
+        }
     });
     
     console.log('[Sandbox] Ready listener added');
