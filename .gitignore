@@ -7,3 +7,5 @@ package-lock.json
 Frontend/.DS_Store
 .env
 .cache
+venv/
+__pycache__/

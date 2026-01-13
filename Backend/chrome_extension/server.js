@@ -384,25 +384,44 @@ app.get('/api/recommendations/latest', async (req, res) => {
         const pythonScriptPath = path.join(__dirname, '..', 'AI Agent', 'run_agent_cli.py');
         const pythonScriptDir = path.join(__dirname, '..', 'AI Agent');
         
-        // Try to use venv Python interpreter, fallback to system python3
+        // Try to use venv Python interpreter, fallback to system python
+        // Check both possible venv locations:
+        // 1. Backend/AI Agent/venv/ (preferred)
+        // 2. .venv in project root (alternative)
         const projectRoot = path.join(__dirname, '..', '..');
-        const venvPython = process.platform === 'win32' 
-            ? path.join(projectRoot, '.venv', 'Scripts', 'python.exe')
-            : path.join(projectRoot, '.venv', 'bin', 'python3');
+        const venvLocations = [
+            // First try: venv in AI Agent directory
+            process.platform === 'win32' 
+                ? path.join(__dirname, '..', 'AI Agent', 'venv', 'Scripts', 'python.exe')
+                : path.join(__dirname, '..', 'AI Agent', 'venv', 'bin', 'python3'),
+            // Second try: .venv in project root
+            process.platform === 'win32' 
+                ? path.join(projectRoot, '.venv', 'Scripts', 'python.exe')
+                : path.join(projectRoot, '.venv', 'bin', 'python3')
+        ];
         
-        // Check if venv Python exists, otherwise use system python3
-        let pythonCommand = 'python3';
+        // Check if venv Python exists, otherwise use system python
+        // On Windows, use 'python', on Mac/Linux use 'python3'
+        let pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
         let pythonArgs = [pythonScriptPath];
         
         try {
-            if (fs.existsSync(venvPython)) {
-                pythonCommand = venvPython;
-                console.log(`Using venv Python: ${pythonCommand}`);
-            } else {
-                console.log('Venv Python not found, using system python3');
+            let venvFound = false;
+            for (const venvPython of venvLocations) {
+                if (fs.existsSync(venvPython)) {
+                    pythonCommand = venvPython;
+                    console.log(`Using venv Python: ${pythonCommand}`);
+                    venvFound = true;
+                    break;
+                }
+            }
+            
+            if (!venvFound) {
+                console.log(`Venv Python not found in any of the checked locations, using system ${pythonCommand}`);
+                console.log(`Checked locations: ${venvLocations.join(', ')}`);
             }
         } catch (err) {
-            console.warn('Could not check for venv Python, using system python3:', err.message);
+            console.warn(`Could not check for venv Python, using system ${pythonCommand}:`, err.message);
         }
         
         // Spawn Python process to run the agent
