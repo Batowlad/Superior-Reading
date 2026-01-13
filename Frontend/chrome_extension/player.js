@@ -187,6 +187,8 @@ window.addEventListener('message', (event) => {
                         <p>${currentTrack.artist}</p>
                         ${currentTrack.album ? `<p style="font-size: 12px; opacity: 0.7;">${currentTrack.album}</p>` : ''}
                     `;
+                } else {
+                    trackInfo.innerHTML = `<p>No track playing</p>`;
                 }
             }
             break;
